@@ -52,8 +52,8 @@ No additional configuration needed.
 
 1. Open Obsidian
 2. Navigate to: **Settings** → **Community Plugins**
-3. Toggle on **"Restricted mode"** if it's disabled
-4. Click **"Turn on Developer Mode"** (appears when Community Plugins are enabled)
+3. Make sure **"Restricted mode"** is turned **off** so community plugins can run
+4. Click **"Turn on Developer Mode"** (appears once Restricted mode is off and Community Plugins are enabled)
 
 ### 4. Link Plugin to Obsidian Vault
 
