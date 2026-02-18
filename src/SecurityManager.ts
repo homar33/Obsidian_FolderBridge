@@ -59,21 +59,85 @@ export class SecurityManager {
 			return 'Real path must be an absolute filesystem path.';
 		}
 
-		// Block obviously dangerous root-level paths
-		const dangerous = ['/', 'C:\\', 'C:/', '/etc', '/usr', '/bin', '/sbin', '/boot', '/dev', '/proc', '/sys'];
+		// Block obviously dangerous root-level paths and their subdirectories
+		const dangerous = [
+			'/', '/etc', '/usr', '/bin', '/sbin', '/boot', '/dev', '/proc', '/sys', '/var',
+			'C:\\', 'C:/',
+			'C:\\Windows', 'C:/Windows',
+			'C:\\Program Files', 'C:/Program Files',
+			'C:\\Program Files (x86)', 'C:/Program Files (x86)'
+		];
 		const norm = normalizeForComparison(mount.realPath);
 		for (const d of dangerous) {
-			if (norm === normalizeForComparison(d)) {
+			const dangerousNorm = normalizeForComparison(d);
+			if (
+				norm === dangerousNorm ||
+				norm.startsWith(dangerousNorm + path.sep) ||
+				// Case-insensitive comparison may produce lowercased or normalized separators; check both
+				norm.startsWith(dangerousNorm + '/')
+			) {
 				return `"${mount.realPath}" is a protected system path and cannot be mounted.`;
 			}
 		}
 
+		// Normalize virtual path (trim and remove trailing slashes) for comparison
+		const virtualNorm = mount.virtualPath.trim().replace(/[\\\/]+$/, '');
+
 		// Reject duplicate virtual paths
-		const virtualNorm = mount.virtualPath.trim();
-		if (existingMounts.some(m => m.virtualPath === virtualNorm)) {
+		if (
+			existingMounts.some(
+				m => (m.virtualPath || '').trim().replace(/[\\\/]+$/, '') === virtualNorm
+			)
+		) {
 			return `Virtual path "${virtualNorm}" is already in use.`;
 		}
 
+		// Reject mounts whose virtual paths are parents/children of existing ones
+		for (const m of existingMounts) {
+			const existingVirtual = (m.virtualPath || '').trim();
+			if (!existingVirtual) {
+				continue;
+			}
+			const existingVirtualNorm = existingVirtual.replace(/[\\\/]+$/, '');
+			if (!existingVirtualNorm || existingVirtualNorm === virtualNorm) {
+				continue;
+			}
+
+			// Check for path-separator-aware parent/child relationships
+			const isCandidateChildOfExisting =
+				virtualNorm.startsWith(existingVirtualNorm + path.sep) ||
+				virtualNorm.startsWith(existingVirtualNorm + '/');
+			const isExistingChildOfCandidate =
+				existingVirtualNorm.startsWith(virtualNorm + path.sep) ||
+				existingVirtualNorm.startsWith(virtualNorm + '/');
+
+			if (isCandidateChildOfExisting || isExistingChildOfCandidate) {
+				return `Virtual path "${virtualNorm}" overlaps with existing mount "${existingVirtualNorm}".`;
+			}
+		}
+
+		// Reject mounts whose real paths are parents/children of existing ones
+		for (const m of existingMounts) {
+			const existingReal = m.realPath;
+			if (!existingReal) {
+				continue;
+			}
+			const existingRealNorm = normalizeForComparison(existingReal);
+			if (existingRealNorm === norm) {
+				continue;
+			}
+
+			const isCandidateChildOfExistingReal =
+				norm.startsWith(existingRealNorm + path.sep) ||
+				norm.startsWith(existingRealNorm + '/');
+			const isExistingChildOfCandidateReal =
+				existingRealNorm.startsWith(norm + path.sep) ||
+				existingRealNorm.startsWith(norm + '/');
+
+			if (isCandidateChildOfExistingReal || isExistingChildOfCandidateReal) {
+				return `Real path "${mount.realPath}" overlaps with existing mount "${existingReal}".`;
+			}
+		}
 		return null;
 	}
 

@@ -161,7 +161,7 @@ export function isUNCPath(p: string): boolean {
 export function ensureLongPathPrefix(p: string): string {
 	if (getPlatform() !== 'windows') return p;
 	if (p.startsWith('\\\\?\\')) return p;  // already prefixed
-	if (p.length <= 255) return p;           // short enough; no prefix needed
+	if (p.length < 260) return p;            // short enough; no prefix needed
 	if (isUNCPath(p)) {
 		// \\server\share\... → \\?\UNC\server\share\...
 		return '\\\\?\\UNC\\' + p.slice(2);

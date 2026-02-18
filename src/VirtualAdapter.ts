@@ -418,7 +418,8 @@ export class VirtualAdapter {
 				if (err.code === 'EXDEV') {
 					// Cross-device move (e.g. different drive letters on Windows):
 					// fall back to copy-then-delete so the operation succeeds transparently.
-					await fs.promises.copyFile(srcReal, dstReal);
+					// Use fs.promises.cp so that both files and directories are handled.
+					await fs.promises.cp(srcReal, dstReal, { recursive: true });
 					await fs.promises.rm(srcReal, { recursive: true });
 					return;
 				}

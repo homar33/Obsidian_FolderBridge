@@ -93,7 +93,7 @@ export default class FolderBridgePlugin extends Plugin {
 				}
 				// Otherwise fall through to the original adapter
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
-				const orig = (target as any)['original'] ?? (target as any).orig?.();
+				const orig = (target as any).orig?.();
 				if (orig && prop in orig) {
 					const val = orig[prop as keyof typeof orig];
 					return typeof val === 'function' ? val.bind(orig) : val;
@@ -222,6 +222,16 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				.onChange(async val => {
 					this.plugin.settings.dryRun = val;
 					await this.plugin.saveSettings();
+
+					// Propagate dry-run changes to the live adapter, if present.
+					const adapter: any = (this.plugin as any).virtualAdapter;
+					if (adapter) {
+						if (typeof adapter.setDryRun === 'function') {
+							adapter.setDryRun(val);
+						} else if ('dryRun' in adapter) {
+							adapter.dryRun = val;
+						}
+					}
 				}));
 
 		new Setting(containerEl)
@@ -232,6 +242,24 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				.onChange(async val => {
 					this.plugin.settings.showStatusBar = val;
 					await this.plugin.saveSettings();
+
+					// Dynamically show/hide the status bar item without requiring a reload
+					if (val) {
+						// Show status bar item if it doesn't exist yet
+						if (!this.plugin.statusBarItem) {
+							this.plugin.statusBarItem = this.plugin.addStatusBarItem();
+							// If there is existing logic to update the text/content of the
+							// status bar item, it should be invoked here. For example:
+							// this.plugin.updateStatusBar();
+						}
+					} else {
+						// Hide status bar item if it exists
+						if (this.plugin.statusBarItem) {
+							this.plugin.statusBarItem.remove();
+							// @ts-ignore - statusBarItem may be typed as non-null elsewhere
+							this.plugin.statusBarItem = null;
+						}
+					}
 				}));
 
 		// ── Mount points ─────────────────────────────────────────────────
