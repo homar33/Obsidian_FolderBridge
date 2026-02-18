@@ -1,0 +1,43 @@
+/* FolderBridge Plugin Styles */
+
+.folderbridge-ribbon-class {
+    color: var(--text-muted);
+}
+
+.folderbridge-ribbon-class:hover {
+    color: var(--text-normal);
+}
+
+/* Settings tab styles */
+.folderbridge-settings-heading {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+}
+
+.folderbridge-mount-point {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    padding: 1em;
+    margin-bottom: 1em;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+}
+
+.folderbridge-mount-point-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.folderbridge-mount-point-paths {
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.folderbridge-virtual-path {
+    color: var(--text-accent);
+    font-weight: 500;
+}
