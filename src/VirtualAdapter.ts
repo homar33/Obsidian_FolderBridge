@@ -41,6 +41,9 @@ export class VirtualAdapter {
 		this.dryRun = dryRun;
 	}
 
+	/** Update dry-run mode without reloading the plugin. */
+	setDryRun(val: boolean): void { this.dryRun = val; }
+
 	// ------------------------------------------------------------------
 	// Delegation helper
 	// ------------------------------------------------------------------
@@ -142,6 +145,17 @@ export class VirtualAdapter {
 				return null;
 			}
 		}
+
+		// Virtual intermediate directory: a path that doesn't exist on disk but
+		// is a parent of a mount (e.g. "Projects" when the mount is "Projects/Work").
+		// Obsidian calls stat() on paths it knows exist (from exists()), so we must
+		// return a synthetic folder stat rather than null.
+		if (this.pathMapper.hasMountsUnder(normalizedPath)) {
+			const real = await this.orig().stat(normalizedPath);
+			if (real) return real;
+			return { type: 'folder', ctime: 0, mtime: Date.now(), size: 0 };
+		}
+
 		return this.orig().stat(normalizedPath);
 	}
 
@@ -458,7 +472,7 @@ export class VirtualAdapter {
 			// Read from source
 			const content: Buffer = srcMount
 				? await fs.promises.readFile(this.toReal(normalizedPath, srcMount))
-				: Buffer.from(await this.orig().read(normalizedPath) as string, 'utf8');
+				: Buffer.from(await this.orig().readBinary(normalizedPath) as ArrayBuffer);
 
 			// Write to destination
 			if (dstMount) {
@@ -468,7 +482,7 @@ export class VirtualAdapter {
 				await fs.promises.mkdir(path.dirname(dstReal), { recursive: true });
 				await fs.promises.writeFile(dstReal, content);
 			} else {
-				await this.orig().write(newNormalizedPath, content.toString('utf8'));
+				await this.orig().writeBinary(newNormalizedPath, content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer);
 			}
 		} catch (e) {
 			// Re-throw FolderBridge errors unchanged; translate raw fs errors
