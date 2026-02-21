@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-folderbridge",
+	"name": "folderbridge",
 	"version": "0.2.0",
-	"description": "Adds external folders to your Obsidian vault as seamless, native-feeling directories",
+	"description": "Adds external folders to your vault as seamless, native-feeling directories. Creates virtual mount points that map real filesystem paths into the vault.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
