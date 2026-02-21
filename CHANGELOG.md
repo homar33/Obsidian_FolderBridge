@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-21
+
+### Added
+- **WSL Support**: Added a dedicated "Browse WSL…" button for Windows users to easily mount Linux folders directly from their WSL distributions.
+
 ## [0.2.0] - 2026-02-21
 
 ### Added
