@@ -183,6 +183,42 @@ export function isReservedWindowsFilename(name: string): boolean {
 	return /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i.test(stem);
 }
 
+// ---------------------------------------------------------------------------
+// WSL (Windows Subsystem for Linux) helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the current process is running inside WSL (Windows
+ * Subsystem for Linux).  Detected by reading /proc/version for the
+ * "Microsoft" or "WSL" strings that the WSL kernel injects.
+ *
+ * Always returns false on non-Linux platforms.
+ */
+export function isWSL(): boolean {
+	if (getPlatform() !== 'linux') return false;
+	try {
+		const version = fs.readFileSync('/proc/version', 'utf8');
+		return /microsoft|wsl/i.test(version);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Convert a WSL drive-mount path like /mnt/c/Users/foo to the equivalent
+ * Windows path C:\Users\foo.  Returns null when the path does not match
+ * the /mnt/<drive-letter>/ pattern.
+ */
+export function wslMountToWindowsPath(wslPath: string): string | null {
+	const match = wslPath.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/);
+	if (!match) return null;
+	const drive = match[1].toUpperCase();
+	const rest = (match[2] ?? '').replace(/\//g, '\\');
+	return `${drive}:${rest || '\\'}`;
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Translate a Node.js filesystem error code into a user-friendly message
  * with platform-appropriate guidance where relevant.
