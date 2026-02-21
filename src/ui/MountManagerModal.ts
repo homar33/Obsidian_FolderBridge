@@ -13,7 +13,7 @@ import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpe
  * Returns the selected absolute path, or null if the user cancelled or the
  * Electron remote API is unavailable in the current host environment.
  */
-export async function browseFolderOnDisk(title = 'Select Folder'): Promise<string | null> {
+export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: string): Promise<string | null> {
 	try {
 		// `electron` is declared external in esbuild so require() resolves to
 		// the host Electron bundle, not a Node module.
@@ -27,10 +27,14 @@ export async function browseFolderOnDisk(title = 'Select Folder'): Promise<strin
 			new Notice('FolderBridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
-		const result = await dialog.showOpenDialog({
+		const options: any = {
 			properties: ['openDirectory'],
 			title,
-		});
+		};
+		if (defaultPath) {
+			options.defaultPath = defaultPath;
+		}
+		const result = await dialog.showOpenDialog(options);
 		if (result.canceled || !result.filePaths?.length) return null;
 		return result.filePaths[0] as string;
 	} catch (err) {
@@ -159,7 +163,7 @@ export class MountManagerModal extends Modal {
 		}
 
 		// ── Real path ──────────────────────────────────────────────────────
-		new Setting(contentEl)
+		const realPathSetting = new Setting(contentEl)
 			.setName('Real path (on disk)')
 			.setDesc('Absolute path to the external folder you want to mount')
 			.addText(text => {
@@ -184,6 +188,22 @@ export class MountManagerModal extends Modal {
 					});
 				btn.buttonEl.setAttribute('aria-label', 'Browse for folder on disk');
 			});
+
+		if (platform === 'windows') {
+			realPathSetting.addButton(btn => {
+				btn.setButtonText('Browse WSL…')
+					.setTooltip('Open the system folder picker directly to your WSL Linux distributions')
+					.onClick(async () => {
+						const selected = await browseFolderOnDisk('Select WSL Folder', '\\\\wsl.localhost');
+						if (selected) {
+							this.realPath = selected;
+							this.realPathText?.setValue(selected);
+							this.syncAutoLabel();
+						}
+					});
+				btn.buttonEl.setAttribute('aria-label', 'Browse for WSL folder');
+			});
+		}
 
 		// WSL context hints
 		if (platform === 'windows') {
