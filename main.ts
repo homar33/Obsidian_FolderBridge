@@ -26,7 +26,7 @@ export default class FolderBridgePlugin extends Plugin {
 
 	// Preserve original adapter so we can restore it on unload
 	private originalAdapter: unknown = null;
-	private statusBarItem: HTMLElement | null = null;
+	statusBarItem: HTMLElement | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -222,16 +222,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				.onChange(async val => {
 					this.plugin.settings.dryRun = val;
 					await this.plugin.saveSettings();
-
-					// Propagate dry-run changes to the live adapter, if present.
-					const adapter: any = (this.plugin as any).virtualAdapter;
-					if (adapter) {
-						if (typeof adapter.setDryRun === 'function') {
-							adapter.setDryRun(val);
-						} else if ('dryRun' in adapter) {
-							adapter.dryRun = val;
-						}
-					}
+					this.plugin.virtualAdapter?.setDryRun(val);
 				}));
 
 		new Setting(containerEl)
@@ -248,9 +239,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 						// Show status bar item if it doesn't exist yet
 						if (!this.plugin.statusBarItem) {
 							this.plugin.statusBarItem = this.plugin.addStatusBarItem();
-							// If there is existing logic to update the text/content of the
-							// status bar item, it should be invoked here. For example:
-							// this.plugin.updateStatusBar();
+							this.plugin.updateStatusBar();
 						}
 					} else {
 						// Hide status bar item if it exists

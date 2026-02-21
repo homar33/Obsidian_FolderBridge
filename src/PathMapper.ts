@@ -90,13 +90,22 @@ export class PathMapper {
 		for (const m of this.mounts) {
 			const mv = normalizePath(m.virtualPath);
 			if (parent === '') {
-				// Root: include mounts with no '/' in their path
-				if (!mv.includes('/')) result.push(mv);
+				// Root: return the first path component of each mount so that
+				// intermediate virtual folders (e.g. "Projects" for a mount at
+				// "Projects/Work") also appear in the vault root listing.
+				const firstSlash = mv.indexOf('/');
+				const directChild = firstSlash === -1 ? mv : mv.slice(0, firstSlash);
+				if (!result.includes(directChild)) result.push(directChild);
 			} else {
-				// Non-root: include mounts whose virtualPath is "parent/childName"
+				// Non-root: include the first direct child under this parent,
+				// whether it is the mount itself or an intermediate virtual folder.
 				if (mv.startsWith(parent + '/')) {
 					const remainder = mv.slice(parent.length + 1);
-					if (!remainder.includes('/')) result.push(mv);
+					const nextSlash = remainder.indexOf('/');
+					const directChild = nextSlash === -1
+						? mv
+						: parent + '/' + remainder.slice(0, nextSlash);
+					if (!result.includes(directChild)) result.push(directChild);
 				}
 			}
 		}

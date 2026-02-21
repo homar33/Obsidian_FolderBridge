@@ -16,7 +16,6 @@ export interface FolderBridgeSettings {
 	allowlist: string[];    // Approved real paths (must match before any I/O)
 	dryRun: boolean;        // Log writes without executing them
 	showStatusBar: boolean;
-	logOperations: boolean;
 }
 
 export const DEFAULT_SETTINGS: FolderBridgeSettings = {
@@ -24,7 +23,6 @@ export const DEFAULT_SETTINGS: FolderBridgeSettings = {
 	allowlist: [],
 	dryRun: false,
 	showStatusBar: true,
-	logOperations: false,
 };
 
 export interface MountStatus {
