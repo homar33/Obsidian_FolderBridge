@@ -12,14 +12,27 @@ import { MountPoint } from './types';
  */
 export class PathMapper {
 	private mounts: MountPoint[] = [];
+	private currentDeviceId: string = '';
 
 	/** Replace the active mount list (call after settings change). */
-	update(mounts: MountPoint[]): void {
+	update(mounts: MountPoint[], deviceId: string = ''): void {
+		this.currentDeviceId = deviceId;
 		this.mounts = mounts.filter(m => m.enabled);
 	}
 
 	getMounts(): MountPoint[] {
 		return this.mounts;
+	}
+
+	/**
+	 * Gets the effective real path for a mount on this specific device,
+	 * falling back to the original realPath if no override exists.
+	 */
+	getEffectiveRealPath(mount: MountPoint): string {
+		if (this.currentDeviceId && mount.deviceOverrides && mount.deviceOverrides[this.currentDeviceId]) {
+			return mount.deviceOverrides[this.currentDeviceId];
+		}
+		return mount.realPath;
 	}
 
 	/**
@@ -61,10 +74,12 @@ export class PathMapper {
 	toRealPath(virtualPath: string, mount: MountPoint): string {
 		const n = normalizePath(virtualPath);
 		const mv = normalizePath(mount.virtualPath);
-		if (n === mv) return mount.realPath;
+		const effectiveRealPath = this.getEffectiveRealPath(mount);
+
+		if (n === mv) return effectiveRealPath;
 		const relative = n.slice(mv.length + 1); // strip "mount/" prefix
 		// On Windows path.join handles backslash; on POSIX it stays as '/'
-		return path.join(mount.realPath, ...relative.split('/'));
+		return path.join(effectiveRealPath, ...relative.split('/'));
 	}
 
 	/**
@@ -72,7 +87,8 @@ export class PathMapper {
 	 * Only valid if realPath is inside mount.realPath.
 	 */
 	toVirtualPath(realPath: string, mount: MountPoint): string {
-		const rel = path.relative(mount.realPath, realPath);
+		const effectiveRealPath = this.getEffectiveRealPath(mount);
+		const rel = path.relative(effectiveRealPath, realPath);
 		if (!rel || rel.startsWith('..')) return normalizePath(mount.virtualPath);
 		return normalizePath(mount.virtualPath + '/' + rel.split(path.sep).join('/'));
 	}

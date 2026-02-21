@@ -10,6 +10,8 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Multi-Root Workspaces** — Work with files from multiple locations simultaneously
 - **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
 - **Zero Duplication** — Files are read and written directly from their real locations
+- **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
+- **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian to improve performance and reduce clutter.
 - **Read-Only Mounts** — Protect external folders from accidental writes
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
@@ -82,6 +84,28 @@ and written directly from their original location; nothing is copied or moved.
 | **Dry-run mode** | Log all writes to console without executing them. Safe for testing. |
 | **Show status bar item** | Display active mount count in Obsidian's status bar. |
 | **Mount list** | Enable, disable, or remove individual mounts. Each mount shows a live reachability badge. |
+| **Allow foreign mounts** | Allow mounts created on other devices to be active if the path exists locally. |
+| **Ignore list** | Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. |
+
+---
+
+## Sync Compatibility (Obsidian Sync / Syncthing)
+
+FolderBridge is designed to work safely with sync engines. When you create a mount, it is tagged with a unique `deviceId` for your current Obsidian instance. This prevents other devices from attempting to mount paths that don't exist locally.
+
+If you sync your vault to another device:
+- **Identical Paths**: If the external folder exists at the exact same path on both devices, you can enable **Allow foreign mounts** in the settings to automatically activate it.
+- **Different Paths**: If the external folder is located elsewhere on the second device, you can click the **Override Path** button next to the mount in the settings to map it to the correct local path for that specific device.
+
+---
+
+## Ignore List
+
+You can hide specific files or folders from Obsidian to improve performance and reduce clutter. This is especially useful for large directories like `node_modules` or build outputs.
+
+- **Exact Match**: Enter the exact name of the file or folder (e.g., `node_modules`).
+- **Glob Patterns**: Use `*` as a wildcard (e.g., `*.tmp`, `build*`).
+- **Context Menu**: Right-click any file or folder inside a mounted directory in Obsidian's file explorer and select **Ignore in FolderBridge** to quickly add it to the list.
 
 ---
 

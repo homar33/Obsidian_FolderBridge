@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-21
+
+### Added
+- **Sync Compatibility (Obsidian Sync / Syncthing)**: Mounts are now tagged with a unique `deviceId` to prevent devices from attempting to mount paths that don't exist locally.
+- **Foreign Mounts Toggle**: Added a setting to allow mounting paths created on other devices if the paths are identical across devices.
+- **Device-Specific Path Overrides**: Added the ability to map a foreign mount to a different local path using the native OS folder browser.
+- **Ignore List**: Added a setting to specify files or folders (using exact names or glob patterns like `*.tmp`) that should be hidden from Obsidian and ignored by the virtual adapter.
+- **Context Menu Integration**: Added an "Ignore in FolderBridge" option to the file explorer context menu for files and folders inside mounted directories.
+
+### Fixed
+- **Performance Optimization**: Fixed a severe "Loading Cache" freeze on startup by scoping the ignore list checks strictly to virtual mount paths, preventing the plugin from scanning the entire native vault.
+
 ## [0.1.0] - 2026-02-21
 
 ### Added

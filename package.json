@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-folderbridge",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Adds external folders to your Obsidian vault as seamless, native-feeling directories",
 	"main": "main.js",
 	"scripts": {

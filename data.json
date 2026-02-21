@@ -1,0 +1,59 @@
+{
+  "mountPoints": [
+    {
+      "virtualPath": "Pictures",
+      "realPath": "K:\\Pictures",
+      "enabled": true,
+      "readOnly": false,
+      "label": "Pictures",
+      "id": "dw952xtmlwu56ef",
+      "deviceId": "pnvhoinmlwve7nw",
+      "ignoreList": [
+        ".git",
+        "node_modules",
+        ".obsidian",
+        "tests/"
+      ]
+    },
+    {
+      "virtualPath": "Eski-Enterprises/Firespeaker",
+      "realPath": "K:\\backup\\Develop\\Firespeaker",
+      "enabled": true,
+      "readOnly": false,
+      "label": "Firespeaker",
+      "id": "byhoaptmlww0y20",
+      "deviceId": "pnvhoinmlwve7nw",
+      "ignoreList": [
+        ".git",
+        "node_modules",
+        ".obsidian",
+        "tests/"
+      ]
+    },
+    {
+      "virtualPath": "Eski-Enterprises/3D Tech Solutions/code-scalpel",
+      "realPath": "K:\\backup\\Develop\\code-scalpel",
+      "enabled": true,
+      "readOnly": false,
+      "label": "Code Scalpel",
+      "id": "zsi7k1ymlww51uz",
+      "deviceId": "pnvhoinmlwve7nw",
+      "ignoreList": [
+        ".git",
+        "node_modules",
+        ".obsidian",
+        "tests/"
+      ]
+    }
+  ],
+  "allowlist": [
+    "K:\\backup\\Develop\\code-scalpel",
+    "K:\\Pictures",
+    "K:\\backup\\Develop\\Firespeaker"
+  ],
+  "dryRun": false,
+  "showStatusBar": true,
+  "mountRootDeletionBehavior": "unmount",
+  "deviceId": "pnvhoinmlwve7nw",
+  "allowForeignMounts": false
+}

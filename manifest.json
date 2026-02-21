@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-folderbridge",
 	"name": "FolderBridge",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"minAppVersion": "0.15.0",
 	"description": "Adds external folders to your Obsidian vault as seamless, native-feeling directories. Creates virtual mount points that map real filesystem paths into the vault.",
 	"author": "tescolopio",

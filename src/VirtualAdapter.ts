@@ -28,17 +28,23 @@ export class VirtualAdapter {
 	private pathMapper: PathMapper;
 	private security: SecurityManager;
 	private dryRun: boolean;
+	private onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>;
+	private isIgnored: (name: string, mount: MountPoint) => boolean;
 
 	constructor(
 		original: unknown,
 		pathMapper: PathMapper,
 		security: SecurityManager,
 		dryRun = false,
+		onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>,
+		isIgnored: (name: string, mount: MountPoint) => boolean
 	) {
 		this.original = original;
 		this.pathMapper = pathMapper;
 		this.security = security;
 		this.dryRun = dryRun;
+		this.onMountRootDelete = onMountRootDelete;
+		this.isIgnored = isIgnored;
 	}
 
 	/** Update dry-run mode without reloading the plugin. */
@@ -92,6 +98,14 @@ export class VirtualAdapter {
 		}
 	}
 
+	private isPathIgnored(normalizedPath: string, mount: MountPoint): boolean {
+		const parts = normalizedPath.split('/');
+		for (const part of parts) {
+			if (this.isIgnored(part, mount)) return true;
+		}
+		return false;
+	}
+
 	// ------------------------------------------------------------------
 	// getName
 	// ------------------------------------------------------------------
@@ -105,6 +119,7 @@ export class VirtualAdapter {
 	async exists(normalizedPath: string, sensitive?: boolean): Promise<boolean> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) return false;
 			const realPath = this.toReal(normalizedPath, mount);
 			try {
 				await fs.promises.access(realPath, fs.constants.F_OK);
@@ -132,6 +147,7 @@ export class VirtualAdapter {
 	async stat(normalizedPath: string): Promise<{ type: 'file' | 'folder'; ctime: number; mtime: number; size: number } | null> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) return null;
 			const realPath = this.toReal(normalizedPath, mount);
 			try {
 				const s = await fs.promises.stat(realPath);
@@ -166,8 +182,9 @@ export class VirtualAdapter {
 	async list(normalizedPath: string): Promise<{ files: string[]; folders: string[] }> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) return { files: [], folders: [] };
 			const realPath = this.toReal(normalizedPath, mount);
-			return this.listRealDirectory(realPath, normalizedPath);
+			return this.listRealDirectory(realPath, normalizedPath, mount);
 		}
 
 		// Merge real vault listing with injected virtual mount folders
@@ -192,6 +209,7 @@ export class VirtualAdapter {
 	private async listRealDirectory(
 		realDirPath: string,
 		virtualParentPath: string,
+		mount: MountPoint,
 	): Promise<{ files: string[]; folders: string[] }> {
 		const files: string[] = [];
 		const folders: string[] = [];
@@ -205,20 +223,28 @@ export class VirtualAdapter {
 		}
 
 		for (const entry of entries) {
+			if (this.isIgnored(entry.name, mount)) continue;
+
 			const virtualChild = virtualParentPath
 				? normalizePath(virtualParentPath + '/' + entry.name)
 				: entry.name;
 
-			// Resolve symlinks to determine actual type
-			try {
-				const s = await fs.promises.stat(path.join(realDirPath, entry.name));
-				if (s.isDirectory()) {
-					folders.push(virtualChild);
-				} else {
-					files.push(virtualChild);
+			if (entry.isDirectory()) {
+				folders.push(virtualChild);
+			} else if (entry.isFile()) {
+				files.push(virtualChild);
+			} else if (entry.isSymbolicLink()) {
+				// Resolve symlinks to determine actual type
+				try {
+					const s = await fs.promises.stat(path.join(realDirPath, entry.name));
+					if (s.isDirectory()) {
+						folders.push(virtualChild);
+					} else {
+						files.push(virtualChild);
+					}
+				} catch {
+					// Broken symlink or permission error – skip silently
 				}
-			} catch {
-				// Broken symlink or permission error – skip silently
 			}
 		}
 
@@ -232,6 +258,7 @@ export class VirtualAdapter {
 	async read(normalizedPath: string): Promise<string> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot read ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			try {
@@ -246,6 +273,7 @@ export class VirtualAdapter {
 	async readBinary(normalizedPath: string): Promise<ArrayBuffer> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot read ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			try {
@@ -267,6 +295,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot write to ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
@@ -285,6 +314,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot write to ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
@@ -303,6 +333,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot append to ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] append → ${realPath}`); return; }
@@ -322,6 +353,7 @@ export class VirtualAdapter {
 	): Promise<string> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot process ignored path "${normalizedPath}"`);
 			const content = await this.read(normalizedPath);
 			const updated = fn(content);
 			await this.write(normalizedPath, updated, options);
@@ -351,6 +383,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot create ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
@@ -366,13 +399,33 @@ export class VirtualAdapter {
 	}
 
 	// ------------------------------------------------------------------
-	// trash
+	// trash / remove
 	// ------------------------------------------------------------------
 
+	private async handleRootMountDeletion(rootMount: MountPoint): Promise<boolean> {
+		const action = await this.onMountRootDelete(rootMount);
+		if (action === 'cancel') {
+			throw new Error(`FolderBridge: Deletion cancelled.`);
+		}
+		if (action === 'unmount') {
+			// The callback handles the unmounting. We just return true to stop the real deletion.
+			return true;
+		}
+		// action === 'delete'
+		return false; // Proceed with real deletion
+	}
+
 	async trashSystem(normalizedPath: string): Promise<boolean> {
+		const rootMount = this.pathMapper.getMountByVirtualPath(normalizedPath);
+		if (rootMount) {
+			const handled = await this.handleRootMountDeletion(rootMount);
+			if (handled) return true;
+		}
+
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot trash ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] trashSystem → ${realPath}`); return true; }
@@ -391,9 +444,16 @@ export class VirtualAdapter {
 	}
 
 	async trashLocal(normalizedPath: string, system?: boolean): Promise<void> {
+		const rootMount = this.pathMapper.getMountByVirtualPath(normalizedPath);
+		if (rootMount) {
+			const handled = await this.handleRootMountDeletion(rootMount);
+			if (handled) return;
+		}
+
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot trash ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] trashLocal → ${realPath}`); return; }
@@ -403,11 +463,60 @@ export class VirtualAdapter {
 		return this.orig().trashLocal(normalizedPath, system);
 	}
 
+	async rmdir(normalizedPath: string, recursive: boolean): Promise<void> {
+		const rootMount = this.pathMapper.getMountByVirtualPath(normalizedPath);
+		if (rootMount) {
+			const handled = await this.handleRootMountDeletion(rootMount);
+			if (handled) return;
+		}
+
+		const mount = this.pathMapper.getMountForPath(normalizedPath);
+		if (mount) {
+			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot remove ignored path "${normalizedPath}"`);
+			const realPath = this.toReal(normalizedPath, mount);
+			this.assertAllowed(realPath);
+			if (this.dryRun) { console.log(`[FolderBridge DryRun] rmdir → ${realPath}`); return; }
+			await fs.promises.rm(realPath, { recursive: true, force: true });
+			return;
+		}
+		if (typeof this.orig().rmdir === 'function') {
+			return this.orig().rmdir(normalizedPath, recursive);
+		}
+	}
+
+	async remove(normalizedPath: string): Promise<void> {
+		const rootMount = this.pathMapper.getMountByVirtualPath(normalizedPath);
+		if (rootMount) {
+			const handled = await this.handleRootMountDeletion(rootMount);
+			if (handled) return;
+		}
+
+		const mount = this.pathMapper.getMountForPath(normalizedPath);
+		if (mount) {
+			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot remove ignored path "${normalizedPath}"`);
+			const realPath = this.toReal(normalizedPath, mount);
+			this.assertAllowed(realPath);
+			if (this.dryRun) { console.log(`[FolderBridge DryRun] remove → ${realPath}`); return; }
+			await fs.promises.rm(realPath, { recursive: true, force: true });
+			return;
+		}
+		if (typeof this.orig().remove === 'function') {
+			return this.orig().remove(normalizedPath);
+		}
+	}
+
 	// ------------------------------------------------------------------
 	// rename / copy
 	// ------------------------------------------------------------------
 
 	async rename(normalizedPath: string, newNormalizedPath: string): Promise<void> {
+		const rootMount = this.pathMapper.getMountByVirtualPath(normalizedPath);
+		if (rootMount) {
+			throw new Error(`FolderBridge: Cannot rename a mount root from the file explorer. To change the mount path, please update it in the FolderBridge plugin settings.`);
+		}
+
 		const srcMount = this.pathMapper.getMountForPath(normalizedPath);
 		const dstMount = this.pathMapper.getMountForPath(newNormalizedPath);
 
@@ -418,6 +527,9 @@ export class VirtualAdapter {
 		if (srcMount && dstMount && srcMount.id === dstMount.id) {
 			// Rename within the same mount
 			if (srcMount.readOnly) throw new Error(`FolderBridge: Mount "${srcMount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, srcMount) || this.isPathIgnored(newNormalizedPath, dstMount)) {
+				throw new Error(`FolderBridge: Cannot rename ignored paths`);
+			}
 			const srcReal = this.toReal(normalizedPath, srcMount);
 			const dstReal = this.toReal(newNormalizedPath, dstMount);
 			this.assertAllowed(srcReal);
@@ -459,6 +571,10 @@ export class VirtualAdapter {
 
 		if (dstMount?.readOnly) {
 			throw new Error(`FolderBridge: Mount "${dstMount.virtualPath}" is read-only.`);
+		}
+
+		if ((srcMount && this.isPathIgnored(normalizedPath, srcMount)) || (dstMount && this.isPathIgnored(newNormalizedPath, dstMount))) {
+			throw new Error(`FolderBridge: Cannot copy ignored paths`);
 		}
 
 		if (this.dryRun) {

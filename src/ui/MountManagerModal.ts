@@ -13,7 +13,7 @@ import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpe
  * Returns the selected absolute path, or null if the user cancelled or the
  * Electron remote API is unavailable in the current host environment.
  */
-async function browseFolderOnDisk(title = 'Select Folder'): Promise<string | null> {
+export async function browseFolderOnDisk(title = 'Select Folder'): Promise<string | null> {
 	try {
 		// `electron` is declared external in esbuild so require() resolves to
 		// the host Electron bundle, not a Node module.
