@@ -122,6 +122,9 @@ describe('SecurityManager', () => {
 			}];
 			const err = sec.validateMount(mkMount('Backup', '/Backup'), existing);
 			expect(err).toBeNull();
+			// Overlap between /Backup and /Backup/Code-Scalpel should be surfaced as an advisory warning
+			const warnings = sec.getPathWarnings('/Backup', existing);
+			expect(warnings.length).toBeGreaterThan(0);
 		});
 
 	});
