@@ -51,11 +51,16 @@ async function browseFolderOnDisk(title = 'Select Folder'): Promise<string | nul
  */
 class VaultFolderPickerModal extends SuggestModal<string> {
 	private onChoose: (folderPath: string) => void;
+	private folders: string[];
 
 	constructor(app: App, onChoose: (folderPath: string) => void) {
 		super(app);
 		this.onChoose = onChoose;
 		this.setPlaceholder('Type to search vault folders… (Enter on blank line = vault root)');
+		// Build the folder list once so getSuggestions only filters, never enumerates
+		this.folders = app.vault.getAllLoadedFiles()
+			.filter((f): f is TFolder => f instanceof TFolder && f.path.length > 0)
+			.map(f => f.path);
 	}
 
 	getSuggestions(query: string): string[] {
@@ -67,11 +72,9 @@ class VaultFolderPickerModal extends SuggestModal<string> {
 			results.push('(vault root)');
 		}
 
-		for (const file of this.app.vault.getAllLoadedFiles()) {
-			if (file instanceof TFolder && file.path.length > 0) {
-				if (!q || file.path.toLowerCase().includes(q)) {
-					results.push(file.path);
-				}
+		for (const p of this.folders) {
+			if (!q || p.toLowerCase().includes(q)) {
+				results.push(p);
 			}
 		}
 		return results;
@@ -168,31 +171,35 @@ export class MountManagerModal extends Modal {
 						this.syncAutoLabel();
 					});
 			})
-			.addButton(btn => btn
-				.setButtonText('Browse…')
-				.setTooltip('Open the system folder picker')
-				.onClick(async () => {
-					const selected = await browseFolderOnDisk('Select External Folder');
-					if (selected) {
-						this.realPath = selected;
-						this.realPathText?.setValue(selected);
-						this.syncAutoLabel();
-					}
-				}));
+			.addButton(btn => {
+				btn.setButtonText('Browse…')
+					.setTooltip('Open the system folder picker')
+					.onClick(async () => {
+						const selected = await browseFolderOnDisk('Select External Folder');
+						if (selected) {
+							this.realPath = selected;
+							this.realPathText?.setValue(selected);
+							this.syncAutoLabel();
+						}
+					});
+				btn.buttonEl.setAttribute('aria-label', 'Browse for folder on disk');
+			});
 
 		// WSL context hints
 		if (platform === 'windows') {
 			contentEl.createEl('p', {
 				text: 'WSL tip: To mount a Linux (WSL 2) folder in Windows Obsidian, use ' +
-					'\\\\wsl.localhost\\<Distro>\\path\\to\\folder — you can also type this ' +
-					'in the Browse dialog address bar.',
+					'\\\\wsl.localhost\\<Distro>\\path (Windows 11 / Win 10 21H1+) ' +
+					'or \\\\wsl$\\<Distro>\\path (older Windows 10). ' +
+					'You can type either path in the Browse dialog address bar.',
 				cls: 'setting-item-description',
 			});
 		} else if (wsl) {
 			contentEl.createEl('p', {
 				text: 'WSL tip: Windows drives are accessible at /mnt/c/, /mnt/d/, etc. ' +
 					'To let Windows-side Obsidian see this folder, use ' +
-					'\\\\wsl.localhost\\<Distro>\\path on the Windows side.',
+					'\\\\wsl.localhost\\<Distro>\\path (Windows 11 / Win 10 21H1+) ' +
+					'or \\\\wsl$\\<Distro>\\path (older Windows 10).',
 				cls: 'setting-item-description',
 			});
 		}
@@ -211,26 +218,28 @@ export class MountManagerModal extends Modal {
 				text.setPlaceholder('Projects/Work')
 					.onChange(val => { this.virtualPath = val.trim(); });
 			})
-			.addButton(btn => btn
-				.setButtonText('Browse vault…')
-				.setTooltip('Pick an existing vault folder as the parent directory')
-				.onClick(() => {
-					new VaultFolderPickerModal(this.app, (chosen) => {
-						// `chosen` is '' for vault root, or an existing folder path.
-						// Preserve any leaf name the user already typed; if empty,
-						// default to the real folder's base name.
-						const trimmedVirtualPath = this.virtualPath.trim();
-						const existingLeaf = trimmedVirtualPath
-							? path.posix.basename(trimmedVirtualPath)
-							: '';
-						const leaf = existingLeaf || (this.realPath ? path.basename(this.realPath) : '');
-						const combined = chosen
-							? normalizePath(`${chosen}/${leaf}`)
-							: leaf;
-						this.virtualPath = combined;
-						this.virtualPathText?.setValue(combined);
-					}).open();
-				}));
+			.addButton(btn => {
+				btn.setButtonText('Browse vault…')
+					.setTooltip('Pick an existing vault folder as the parent directory')
+					.onClick(() => {
+						new VaultFolderPickerModal(this.app, (chosen) => {
+							// `chosen` is '' for vault root, or an existing folder path.
+							// Preserve any leaf name the user already typed; if empty,
+							// default to the real folder's base name.
+							const trimmedVirtualPath = this.virtualPath.trim();
+							const existingLeaf = trimmedVirtualPath
+								? path.posix.basename(trimmedVirtualPath)
+								: '';
+							const leaf = existingLeaf || (this.realPath ? path.basename(this.realPath) : '');
+							const combined = chosen
+								? normalizePath(`${chosen}/${leaf}`)
+								: leaf;
+							this.virtualPath = combined;
+							this.virtualPathText?.setValue(combined);
+						}).open();
+					});
+				btn.buttonEl.setAttribute('aria-label', 'Browse vault folders');
+			});
 
 		// ── Use folder name as label ───────────────────────────────────────
 		new Setting(contentEl)

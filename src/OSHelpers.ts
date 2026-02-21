@@ -189,13 +189,19 @@ export function isReservedWindowsFilename(name: string): boolean {
 
 /**
  * Returns true when the current process is running inside WSL (Windows
- * Subsystem for Linux).  Detected by reading /proc/version for the
- * "Microsoft" or "WSL" strings that the WSL kernel injects.
+ * Subsystem for Linux).
+ *
+ * Detection strategy (in order):
+ *  1. `WSL_DISTRO_NAME` env var — set by WSL 2 for the active distro name
+ *  2. `WSLENV` env var — set by both WSL 1 and WSL 2 for shared env vars
+ *  3. `/proc/version` fallback — reads the kernel version string and checks
+ *     for "microsoft" or "wsl" (covers edge cases where env vars are absent)
  *
  * Always returns false on non-Linux platforms.
  */
 export function isWSL(): boolean {
 	if (getPlatform() !== 'linux') return false;
+	if (process.env.WSL_DISTRO_NAME || process.env.WSLENV) return true;
 	try {
 		const version = fs.readFileSync('/proc/version', 'utf8');
 		return /microsoft|wsl/i.test(version);
@@ -211,6 +217,9 @@ export function isWSL(): boolean {
  * Only single-letter drive mounts under /mnt are supported (e.g., /mnt/c,
  * /mnt/D).  Paths with multi-letter mount names such as /mnt/cc/path do
  * not match this pattern and will cause the function to return null.
+ *
+ * Exported for use by future UI features (e.g. auto-converting a WSL path
+ * to its Windows-side UNC form when the user is setting up a cross-OS mount).
  */
 export function wslMountToWindowsPath(wslPath: string): string | null {
 	// Regex intentionally restricts to a single drive letter under /mnt
