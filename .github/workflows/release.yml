@@ -3,11 +3,13 @@ name: Build and Release
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]*.[0-9]*.[0-9]*'
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -26,9 +28,36 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify build output
+        run: test -f main.js || (echo "main.js not found after build" && exit 1)
+
+      - name: Validate tag version matches manifest.json
+        run: |
+          MANIFEST_VERSION=$(node -p "require('./manifest.json').version")
+          TAG_VERSION="${{ github.ref_name }}"
+          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Tag ($TAG_VERSION) does not match manifest.json version ($MANIFEST_VERSION)"
+            echo "Run 'npm version $TAG_VERSION' to sync, then re-tag."
+            exit 1
+          fi
+          echo "Version validated: $TAG_VERSION"
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          TAG="${{ github.ref_name }}"
+          awk -v ver="$TAG" '
+            /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) found=1; next }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            printf "See [CHANGELOG.md](CHANGELOG.md) for full details.\n" > release_notes.md
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release_notes.md
           files: |
             main.js
             manifest.json
+            styles.css
