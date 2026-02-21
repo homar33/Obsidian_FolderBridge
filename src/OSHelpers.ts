@@ -183,6 +183,56 @@ export function isReservedWindowsFilename(name: string): boolean {
 	return /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i.test(stem);
 }
 
+// ---------------------------------------------------------------------------
+// WSL (Windows Subsystem for Linux) helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the current process is running inside WSL (Windows
+ * Subsystem for Linux).
+ *
+ * Detection strategy (in order):
+ *  1. `WSL_DISTRO_NAME` env var — set by WSL 2 for the active distro name
+ *  2. `WSLENV` env var — set by both WSL 1 and WSL 2 for shared env vars
+ *  3. `/proc/version` fallback — reads the kernel version string and checks
+ *     for "microsoft" or "wsl" (covers edge cases where env vars are absent)
+ *
+ * Always returns false on non-Linux platforms.
+ */
+export function isWSL(): boolean {
+	if (getPlatform() !== 'linux') return false;
+	if (process.env.WSL_DISTRO_NAME || process.env.WSLENV) return true;
+	try {
+		const version = fs.readFileSync('/proc/version', 'utf8');
+		return /microsoft|wsl/i.test(version);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Convert a WSL drive-mount path like /mnt/c/Users/foo to the equivalent
+ * Windows path C:\Users\foo.
+ *
+ * Only single-letter drive mounts under /mnt are supported (e.g., /mnt/c,
+ * /mnt/D).  Paths with multi-letter mount names such as /mnt/cc/path do
+ * not match this pattern and will cause the function to return null.
+ *
+ * Exported for use by future UI features (e.g. auto-converting a WSL path
+ * to its Windows-side UNC form when the user is setting up a cross-OS mount).
+ */
+export function wslMountToWindowsPath(wslPath: string): string | null {
+	// Regex intentionally restricts to a single drive letter under /mnt
+	// (i.e. /mnt/<drive-letter>[/...]); multi-letter mounts are treated as invalid.
+	const match = wslPath.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/);
+	if (!match) return null;
+	const drive = match[1].toUpperCase();
+	const rest = (match[2] ?? '').replace(/\//g, '\\');
+	return `${drive}:${rest || '\\'}`;
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Translate a Node.js filesystem error code into a user-friendly message
  * with platform-appropriate guidance where relevant.
@@ -195,12 +245,12 @@ export function translateFsError(err: NodeJS.ErrnoException, op: string): string
 		case 'EPERM':
 			return getPlatform() === 'windows'
 				? `Operation not permitted on ${p}. On Windows, creating symbolic links ` +
-				  `requires Developer Mode (Settings → System → For Developers) or administrator rights.`
+					`requires Developer Mode (Settings → System → For Developers) or administrator rights.`
 				: `Operation not permitted on ${p}. Check file permissions or ownership.`;
 		case 'ENAMETOOLONG':
 			return getPlatform() === 'windows'
 				? `Path exceeds the Windows 260-character limit. Enable Long Paths in ` +
-				  `Windows Settings → System → For Developers → Long Paths, or use a shorter path.`
+					`Windows Settings → System → For Developers → Long Paths, or use a shorter path.`
 				: `Path name is too long for the filesystem.`;
 		case 'EBUSY':
 			return `${p} is locked by another process. Close any programs using it and try again.`;

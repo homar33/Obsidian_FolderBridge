@@ -7,6 +7,8 @@ import {
 	ensureLongPathPrefix,
 	isReservedWindowsFilename,
 	translateFsError,
+	isWSL,
+	wslMountToWindowsPath,
 } from '../src/OSHelpers';
 
 // Helper: temporarily override process.platform for Windows-specific tests
@@ -221,6 +223,100 @@ describe('OSHelpers', () => {
 			const e = mkErr('EUNKNOWN');
 			e.message = 'something weird';
 			expect(translateFsError(e, 'read')).toContain('something weird');
+		});
+	});
+
+	describe('isWSL', () => {
+		// Helper: temporarily set / clear a process.env variable
+		function withEnv(key: string, value: string | undefined, fn: () => void): void {
+			const orig = process.env[key];
+			if (value === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = value;
+			}
+			try { fn(); } finally {
+				if (orig === undefined) {
+					delete process.env[key];
+				} else {
+					process.env[key] = orig;
+				}
+			}
+		}
+
+		it('returns false on Windows', () => {
+			withPlatform('win32', () => {
+				expect(isWSL()).toBe(false);
+			});
+		});
+
+		it('returns false on macOS', () => {
+			withPlatform('darwin', () => {
+				expect(isWSL()).toBe(false);
+			});
+		});
+
+		it('returns true on Linux when WSL_DISTRO_NAME is set', () => {
+			withPlatform('linux', () => {
+				withEnv('WSL_DISTRO_NAME', 'Ubuntu', () => {
+					withEnv('WSLENV', undefined, () => {
+						expect(isWSL()).toBe(true);
+					});
+				});
+			});
+		});
+
+		it('returns true on Linux when WSLENV is set', () => {
+			withPlatform('linux', () => {
+				withEnv('WSL_DISTRO_NAME', undefined, () => {
+					withEnv('WSLENV', 'PATH/l', () => {
+						expect(isWSL()).toBe(true);
+					});
+				});
+			});
+		});
+
+		it('returns false on non-Linux even when WSL env vars are set', () => {
+			withPlatform('win32', () => {
+				withEnv('WSL_DISTRO_NAME', 'Ubuntu', () => {
+					expect(isWSL()).toBe(false);
+				});
+			});
+		});
+	});
+
+	describe('wslMountToWindowsPath', () => {
+		it('converts /mnt/c/Users/foo to C:\\Users\\foo', () => {
+			expect(wslMountToWindowsPath('/mnt/c/Users/foo')).toBe('C:\\Users\\foo');
+		});
+
+		it('converts /mnt/d/projects/bar to D:\\projects\\bar', () => {
+			expect(wslMountToWindowsPath('/mnt/d/projects/bar')).toBe('D:\\projects\\bar');
+		});
+
+		it('uppercases the drive letter', () => {
+			expect(wslMountToWindowsPath('/mnt/z/foo')).toBe('Z:\\foo');
+		});
+
+		it('converts a bare drive mount /mnt/c to C:\\', () => {
+			expect(wslMountToWindowsPath('/mnt/c')).toBe('C:\\');
+		});
+
+		it('handles paths with spaces', () => {
+			expect(wslMountToWindowsPath('/mnt/c/Users/My Documents')).toBe('C:\\Users\\My Documents');
+		});
+
+		it('returns null for non-mount POSIX paths', () => {
+			expect(wslMountToWindowsPath('/home/user')).toBeNull();
+			expect(wslMountToWindowsPath('/usr/local/bin')).toBeNull();
+		});
+
+		it('returns null for empty string', () => {
+			expect(wslMountToWindowsPath('')).toBeNull();
+		});
+
+		it('returns null for Windows-style paths', () => {
+			expect(wslMountToWindowsPath('C:\\Users\\foo')).toBeNull();
 		});
 	});
 });

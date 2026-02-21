@@ -81,12 +81,12 @@ export class SecurityManager {
 		}
 
 		// Normalize virtual path (trim and remove trailing slashes) for comparison
-		const virtualNorm = mount.virtualPath.trim().replace(/[\\\/]+$/, '');
+		const virtualNorm = mount.virtualPath.trim().replace(/[\\/]+$/, '');
 
 		// Reject duplicate virtual paths
 		if (
 			existingMounts.some(
-				m => (m.virtualPath || '').trim().replace(/[\\\/]+$/, '') === virtualNorm
+				m => (m.virtualPath || '').trim().replace(/[\\/]+$/, '') === virtualNorm
 			)
 		) {
 			return `Virtual path "${virtualNorm}" is already in use.`;
@@ -98,7 +98,7 @@ export class SecurityManager {
 			if (!existingVirtual) {
 				continue;
 			}
-			const existingVirtualNorm = existingVirtual.replace(/[\\\/]+$/, '');
+			const existingVirtualNorm = existingVirtual.replace(/[\\/]+$/, '');
 			if (!existingVirtualNorm || existingVirtualNorm === virtualNorm) {
 				continue;
 			}

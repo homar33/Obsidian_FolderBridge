@@ -59,16 +59,19 @@ Then in Obsidian: **Settings → Community Plugins → disable Safe Mode → ena
 
 ## Quick Start
 
-1. Click the **folder-plus** ribbon icon (or go to **Settings → FolderBridge**)
-2. Click **Add Mount Point**
-3. Fill in:
-   - **Virtual path** — where the folder will appear in your vault, e.g. `Projects/Work`
-   - **Real path** — the absolute path on disk, e.g. `C:\Users\YourName\Documents\Work` (Windows) or `/home/yourname/Documents/Work` (Linux/Mac)
-4. Click **Validate & Add**
+1. Click the **folder-plus** ribbon icon (or go to **Settings → FolderBridge → Add Mount Point**)
+2. **Real path** — click **Browse…** to open the system folder picker, or type the absolute path directly
+   - Windows example: `C:\Users\YourName\Documents\Work`
+   - Linux / macOS example: `/home/yourname/Documents/Work`
+   - WSL folder from Windows: `\\wsl.localhost\Ubuntu\home\yourname\Work`
+3. **Virtual path** — where the folder will appear inside your vault, e.g. `Projects/Work`
+   - Click **Browse vault…** to pick an existing vault folder as the parent
+   - Leave empty to mount at vault root using the real folder's name
+4. Optionally enable **Use folder name as label** to auto-fill the display name, or type a custom label
+5. Click **Validate & Add**
 
-The folder appears immediately in Obsidian's file explorer at the virtual path you chose —
-no restart needed. Files are read and written directly from their original location on disk;
-nothing is copied or moved.
+The folder appears immediately in Obsidian's file explorer — no restart needed. Files are read
+and written directly from their original location; nothing is copied or moved.
 
 ---
 
