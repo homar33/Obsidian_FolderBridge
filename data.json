@@ -44,12 +44,27 @@
         ".obsidian",
         "tests/"
       ]
+    },
+    {
+      "virtualPath": "moltbook-graph",
+      "realPath": "D:\\moltbook-graph",
+      "enabled": true,
+      "readOnly": false,
+      "label": "moltbook-graph",
+      "id": "ykf4i61mlwxvtyz",
+      "deviceId": "pnvhoinmlwve7nw",
+      "ignoreList": [
+        ".git",
+        "node_modules",
+        ".obsidian"
+      ]
     }
   ],
   "allowlist": [
     "K:\\backup\\Develop\\code-scalpel",
     "K:\\Pictures",
-    "K:\\backup\\Develop\\Firespeaker"
+    "K:\\backup\\Develop\\Firespeaker",
+    "D:\\moltbook-graph"
   ],
   "dryRun": false,
   "showStatusBar": true,
