@@ -27,6 +27,16 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 2. Click **Browse** and search for **FolderBridge**
 3. Install and enable the plugin
 
+### Using BRAT (Beta Reviewers Auto-update Tool)
+
+If you want to test the latest pre-release versions or if the plugin is not yet available in the community directory, you can install it using [BRAT](https://tfthacker.com/BRAT):
+
+1. Install the **Obsidian42 - BRAT** plugin from the Community Plugins directory.
+2. Enable BRAT in your settings.
+3. Open the command palette and run **BRAT: Add a beta plugin for testing**.
+4. Enter the repository URL: `https://github.com/tescolopio/Obsidian_FolderBridge`
+5. Click **Add Plugin**. BRAT will automatically download and install the latest release.
+
 ### Manual Installation
 
 1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/tescolopio/Obsidian_FolderBridge/releases/latest)
