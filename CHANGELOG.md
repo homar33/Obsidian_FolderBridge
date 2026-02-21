@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Windows reserved filename blocking (`CON`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`)
   - Case-insensitive NTFS path comparisons
   - Cross-device move fallback (`EXDEV` → copy-then-delete)
+- **Native folder browser** — "Browse…" button opens the OS folder picker (Electron `remote.dialog`); falls back gracefully to manual entry if unavailable
+- **Vault folder picker** — "Browse vault…" button opens a fuzzy-search modal of existing vault folders for easy virtual-path nesting
+- **Auto-label from folder name** — "Use folder name as label" toggle auto-fills the display label with the real folder's base name; editable at any time
+- **WSL cross-environment hints** — contextual tips in the add-mount dialog:
+  - On Windows: `\\wsl.localhost\<Distro>\path` UNC pattern for accessing WSL 2 Linux folders
+  - In WSL: `/mnt/c/` etc. and how to expose the same folder to Windows-side Obsidian
+- `isWSL()` and `wslMountToWindowsPath()` helpers in `OSHelpers.ts`
 - Read-only mount flag to prevent accidental writes
 - Mount enable/disable toggle (no removal required)
 - Optional display labels for mounts
@@ -32,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions: build check workflow and release workflow using `softprops/action-gh-release`
 
 ### Fixed
+- Virtual mounts now appear in the file explorer immediately on load and when added/toggled/removed — `notifyVaultMountAdded/Removed` fires `vault.onChange('created'/'deleted')` so Obsidian inserts the `TFolder` into its tree without a restart
 - Status bar text was not populated when enabling the status bar item via the settings toggle
 - `stat()` now returns a synthetic folder stat for virtual intermediate directories (e.g. `Projects` when the mount is `Projects/Work`), preventing Obsidian from treating them as non-existent
 - `getVirtualMountsDirectChildren` now correctly surfaces intermediate virtual directories in vault listings so nested mount paths (e.g. `Projects/Work`) are visible when browsing the vault root

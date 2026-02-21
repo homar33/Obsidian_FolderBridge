@@ -177,15 +177,15 @@ export class MountManagerModal extends Modal {
 		if (platform === 'windows') {
 			contentEl.createEl('p', {
 				text: 'WSL tip: To mount a Linux (WSL 2) folder in Windows Obsidian, use ' +
-				      '\\\\wsl.localhost\\<Distro>\\path\\to\\folder — you can also type this ' +
-				      'in the Browse dialog address bar.',
+					'\\\\wsl.localhost\\<Distro>\\path\\to\\folder — you can also type this ' +
+					'in the Browse dialog address bar.',
 				cls: 'setting-item-description',
 			});
 		} else if (wsl) {
 			contentEl.createEl('p', {
 				text: 'WSL tip: Windows drives are accessible at /mnt/c/, /mnt/d/, etc. ' +
-				      'To let Windows-side Obsidian see this folder, use ' +
-				      '\\\\wsl.localhost\\<Distro>\\path on the Windows side.',
+					'To let Windows-side Obsidian see this folder, use ' +
+					'\\\\wsl.localhost\\<Distro>\\path on the Windows side.',
 				cls: 'setting-item-description',
 			});
 		}
