@@ -206,10 +206,15 @@ export function isWSL(): boolean {
 
 /**
  * Convert a WSL drive-mount path like /mnt/c/Users/foo to the equivalent
- * Windows path C:\Users\foo.  Returns null when the path does not match
- * the /mnt/<drive-letter>/ pattern.
+ * Windows path C:\Users\foo.
+ *
+ * Only single-letter drive mounts under /mnt are supported (e.g., /mnt/c,
+ * /mnt/D).  Paths with multi-letter mount names such as /mnt/cc/path do
+ * not match this pattern and will cause the function to return null.
  */
 export function wslMountToWindowsPath(wslPath: string): string | null {
+	// Regex intentionally restricts to a single drive letter under /mnt
+	// (i.e. /mnt/<drive-letter>[/...]); multi-letter mounts are treated as invalid.
 	const match = wslPath.match(/^\/mnt\/([a-zA-Z])(\/.*)?$/);
 	if (!match) return null;
 	const drive = match[1].toUpperCase();

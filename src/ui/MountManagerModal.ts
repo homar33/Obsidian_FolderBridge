@@ -68,7 +68,7 @@ class VaultFolderPickerModal extends SuggestModal<string> {
 		}
 
 		for (const file of this.app.vault.getAllLoadedFiles()) {
-			if (file instanceof TFolder && file.path !== '/') {
+			if (file instanceof TFolder && file.path.length > 0) {
 				if (!q || file.path.toLowerCase().includes(q)) {
 					results.push(file.path);
 				}
@@ -78,7 +78,14 @@ class VaultFolderPickerModal extends SuggestModal<string> {
 	}
 
 	renderSuggestion(item: string, el: HTMLElement): void {
-		el.createEl('div', { text: item });
+		const container = el.createEl('div', { cls: 'vault-folder-suggestion' });
+
+		if (item === '(vault root)') {
+			container.addClass('vault-folder-suggestion-root');
+			container.createSpan({ text: item, cls: 'vault-folder-suggestion-label' });
+		} else {
+			container.createSpan({ text: item, cls: 'vault-folder-suggestion-label' });
+		}
 	}
 
 	onChooseSuggestion(item: string): void {
@@ -212,9 +219,10 @@ export class MountManagerModal extends Modal {
 						// `chosen` is '' for vault root, or an existing folder path.
 						// Preserve any leaf name the user already typed; if empty,
 						// default to the real folder's base name.
-						const existingLeaf = this.virtualPath.includes('/')
-							? this.virtualPath.split('/').pop()!.trim()
-							: this.virtualPath.trim();
+						const trimmedVirtualPath = this.virtualPath.trim();
+						const existingLeaf = trimmedVirtualPath
+							? path.posix.basename(trimmedVirtualPath)
+							: '';
 						const leaf = existingLeaf || (this.realPath ? path.basename(this.realPath) : '');
 						const combined = chosen
 							? normalizePath(`${chosen}/${leaf}`)
@@ -235,7 +243,14 @@ export class MountManagerModal extends Modal {
 				.setValue(false)
 				.onChange(val => {
 					this.useFolderNameAsLabel = val;
-					this.syncAutoLabel();
+					// Only auto-fill when enabling the toggle and the label is currently empty
+					if (val) {
+						const currentLabel =
+							(this.labelText?.getValue?.() ?? this.label ?? '').trim();
+						if (!currentLabel) {
+							this.syncAutoLabel();
+						}
+					}
 				}));
 
 		// ── Label ──────────────────────────────────────────────────────────
