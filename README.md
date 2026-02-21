@@ -1,4 +1,4 @@
-# Obsidian FolderBridge
+# FolderBridge
 
 Extends Obsidian's single-root vault by letting you mount external folders as seamless, native-feeling directories inside your vault. Files stay in their original locations — no copying, no duplicating, no symlinking required.
 
@@ -40,7 +40,7 @@ If you want to test the latest pre-release versions or if the plugin is not yet 
 ### Manual Installation
 
 1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/tescolopio/Obsidian_FolderBridge/releases/latest)
-2. Copy them to `<your-vault>/.obsidian/plugins/obsidian-folderbridge/`
+2. Copy them to `<your-vault>/.obsidian/plugins/folderbridge/`
 3. Enable the plugin in **Settings → Community Plugins**
 
 ### Local Development (git clone)
@@ -50,9 +50,9 @@ If you want to run straight from source (no release download needed):
 ```bash
 # 1. Clone into your vault's plugin folder
 git clone https://github.com/tescolopio/Obsidian_FolderBridge.git \
-  /path/to/your-vault/.obsidian/plugins/obsidian-folderbridge
+  /path/to/your-vault/.obsidian/plugins/folderbridge
 
-cd /path/to/your-vault/.obsidian/plugins/obsidian-folderbridge
+cd /path/to/your-vault/.obsidian/plugins/folderbridge
 
 # 2. Install dependencies
 npm install
@@ -161,10 +161,10 @@ npm install
 
 ```bash
 # Windows (PowerShell, run as administrator or with Developer Mode enabled)
-New-Item -ItemType Junction -Path "$env:APPDATA\obsidian\<YourVault>\.obsidian\plugins\obsidian-folderbridge" -Target (Get-Location)
+New-Item -ItemType Junction -Path "$env:APPDATA\obsidian\<YourVault>\.obsidian\plugins\folderbridge" -Target (Get-Location)
 
 # Linux / macOS
-ln -s "$(pwd)" "/path/to/vault/.obsidian/plugins/obsidian-folderbridge"
+ln -s "$(pwd)" "/path/to/vault/.obsidian/plugins/folderbridge"
 ```
 
 ### Build scripts
