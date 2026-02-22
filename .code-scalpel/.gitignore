@@ -1,3 +1,7 @@
+# License key - never commit
+license/license.jwt
+license/license_state.json
+
 # Runtime audit logs
 audit.log
 autonomy_audit/
