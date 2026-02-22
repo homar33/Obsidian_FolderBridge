@@ -115,22 +115,22 @@ You can hide specific files or folders from Obsidian to improve performance and 
 
 - **Exact Match**: Enter the exact name of the file or folder (e.g., `node_modules`).
 - **Glob Patterns**: Use `*` as a wildcard (e.g., `*.tmp`, `build*`).
-- **Context Menu**: Right-click any file or folder inside a mounted directory in Obsidian's file explorer and select **Ignore in FolderBridge** to quickly add it to the list.
+- **Context Menu**: Right-click any file or folder inside a mounted directory in Obsidian's file explorer and select **Ignore in Folder Bridge** to quickly add it to the list.
 
 ---
 
 ## Windows Notes
 
 - **Long paths**: Paths over 260 characters are handled automatically with the `\\?\` prefix. For best results, also enable **Long Path Support** in Windows Settings → System → For Developers.
-- **Symlinks**: Creating symlinks on Windows requires either Developer Mode or administrator rights. FolderBridge itself does not create symlinks, but the underlying filesystem may encounter related permission errors.
+- **Symlinks**: Creating symlinks on Windows requires either Developer Mode or administrator rights. Folder Bridge itself does not create symlinks, but the underlying filesystem may encounter related permission errors.
 - **UNC network paths** (`\\server\share\...`): Supported, but file-change watching may not work on some servers and the path may be unavailable offline.
-- **Reserved names**: Files and folders named `CON`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9` (Windows reserved device names) are blocked from creation via FolderBridge to prevent cryptic OS errors.
+- **Reserved names**: Files and folders named `CON`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9` (Windows reserved device names) are blocked from creation via Folder Bridge to prevent cryptic OS errors.
 
 ---
 
 ## Architecture
 
-FolderBridge installs a lightweight **virtual filesystem adapter shim** that intercepts every I/O call Obsidian makes to its vault:
+Folder Bridge installs a lightweight **virtual filesystem adapter shim** that intercepts every I/O call Obsidian makes to its vault:
 
 ```
 Obsidian → vault.adapter (Proxy) → VirtualAdapter

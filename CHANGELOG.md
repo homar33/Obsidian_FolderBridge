@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to FolderBridge will be documented in this file.
+All notable changes to Folder Bridge will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Foreign Mounts Toggle**: Added a setting to allow mounting paths created on other devices if the paths are identical across devices.
 - **Device-Specific Path Overrides**: Added the ability to map a foreign mount to a different local path using the native OS folder browser.
 - **Ignore List**: Added a setting to specify files or folders (using exact names or glob patterns like `*.tmp`) that should be hidden from Obsidian and ignored by the virtual adapter.
-- **Context Menu Integration**: Added an "Ignore in FolderBridge" option to the file explorer context menu for files and folders inside mounted directories.
+- **Context Menu Integration**: Added an "Ignore in Folder Bridge" option to the file explorer context menu for files and folders inside mounted directories.
 
 ### Fixed
 - **Performance Optimization**: Fixed a severe "Loading Cache" freeze on startup by scoping the ignore list checks strictly to virtual mount paths, preventing the plugin from scanning the entire native vault.
