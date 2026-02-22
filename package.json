@@ -28,5 +28,8 @@
 		"tslib": "2.6.2",
 		"typescript": "5.3.3",
 		"vitest": "^4.0.18"
+	},
+	"dependencies": {
+		"chokidar": "^5.0.0"
 	}
 }

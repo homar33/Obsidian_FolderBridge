@@ -6,6 +6,7 @@ import { SecurityManager } from './src/SecurityManager';
 import { MountManagerModal, getMountStatus, browseFolderOnDisk } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { getPlatform } from './src/OSHelpers';
+import { FileWatcher } from './src/FileWatcher';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -24,6 +25,7 @@ export default class FolderBridgePlugin extends Plugin {
 	pathMapper: PathMapper;
 	security: SecurityManager;
 	virtualAdapter: VirtualAdapter | null = null;
+	fileWatcher: FileWatcher | null = null;
 
 	// Preserve original adapter so we can restore it on unload
 	private originalAdapter: unknown = null;
@@ -35,6 +37,9 @@ export default class FolderBridgePlugin extends Plugin {
 		this.pathMapper = new PathMapper();
 		this.security = new SecurityManager(this.settings.allowlist);
 		this.pathMapper.update(this.settings.mountPoints, this.settings.deviceId);
+
+		// [FEATURE_20260222] Initialize FileWatcher
+		this.fileWatcher = new FileWatcher(this.app, this.pathMapper, (name, mount) => this.isNameIgnored(name, mount));
 
 		// Install the virtual adapter shim
 		this.installVirtualAdapter();
@@ -121,6 +126,9 @@ export default class FolderBridgePlugin extends Plugin {
 	}
 
 	onunload() {
+		// [FEATURE_20260222] Stop all file watchers
+		this.fileWatcher?.stopAll();
+
 		// Restore the original adapter so the vault works normally after unload
 		if (this.originalAdapter) {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -430,6 +438,9 @@ export default class FolderBridgePlugin extends Plugin {
 				}
 			}
 		}, 100);
+
+		// [FEATURE_20260222] Start watching the mount for external changes
+		this.fileWatcher?.startWatching(mount);
 	}
 
 	/**
@@ -441,6 +452,9 @@ export default class FolderBridgePlugin extends Plugin {
 	 * virtual paths to real paths, and the files will remain orphaned in the UI.
 	 */
 	async notifyVaultMountRemoved(mount: MountPoint): Promise<void> {
+		// [FEATURE_20260222] Stop watching the mount for external changes
+		this.fileWatcher?.stopWatching(mount);
+
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const vault = this.app.vault as any;
 		if (typeof vault.onChange !== 'function') return;
