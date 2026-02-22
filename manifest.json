@@ -1,6 +1,6 @@
 {
 	"id": "folderbridge",
-	"name": "FolderBridge",
+	"name": "Folder Bridge",
 	"version": "0.3.0",
 	"minAppVersion": "0.15.0",
 	"description": "Adds external folders to your vault as seamless, native-feeling directories. Creates virtual mount points that map real filesystem paths into the vault.",
