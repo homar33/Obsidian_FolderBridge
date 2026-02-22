@@ -1,4 +1,5 @@
 import * as chokidar from 'chokidar';
+import * as path from 'path';
 import { App, normalizePath } from 'obsidian';
 import { MountPoint } from './types';
 import { PathMapper } from './PathMapper';
@@ -30,7 +31,7 @@ export class FileWatcher {
         const watcher = chokidar.watch(realPath, {
             ignored: (testPath: string, stats?: fs.Stats) => {
                 // Ignore hidden files/folders and node_modules
-                const name = testPath.split(/[/\\]/).pop() || '';
+                const name = path.basename(testPath);
                 if (name.startsWith('.') || name === 'node_modules') return true;
 
                 // Apply user-defined ignore rules
@@ -55,14 +56,14 @@ export class FileWatcher {
 
         watcher
             .on('add', (filePath) => this.handleEvent('file-created', filePath, mount))
-            .on('change', (filePath) => this.handleEvent('modified', filePath, mount))
+            .on('change', (filePath) => this.handleEvent('file-changed', filePath, mount))
             .on('unlink', (filePath) => this.handleEvent('file-removed', filePath, mount))
             .on('addDir', (dirPath) => this.handleEvent('folder-created', dirPath, mount))
             .on('unlinkDir', (dirPath) => this.handleEvent('folder-removed', dirPath, mount))
-            .on('error', (error) => console.error(`[FolderBridge] Watcher error for mount ${mount.virtualPath}:`, error));
+            .on('error', (error) => console.warn(`[FolderBridge] Watcher error for mount ${mount.virtualPath}:`, error));
 
         this.watchers.set(mount.id, watcher);
-        console.log(`[FolderBridge] Started watching: ${realPath}`);
+        console.debug(`[FolderBridge] Started watching: ${realPath}`);
     }
 
     /**
@@ -73,7 +74,7 @@ export class FileWatcher {
         if (watcher) {
             watcher.close();
             this.watchers.delete(mount.id);
-            console.log(`[FolderBridge] Stopped watching: ${this.pathMapper.getEffectiveRealPath(mount)}`);
+            console.debug(`[FolderBridge] Stopped watching: ${this.pathMapper.getEffectiveRealPath(mount)}`);
         }
     }
 
@@ -103,11 +104,11 @@ export class FileWatcher {
 
             if (eventType === 'file-created' || eventType === 'folder-created') {
                 if (existsInVault) return; // Already known to Obsidian
-            } else if (eventType === 'file-removed' || eventType === 'folder-removed' || eventType === 'modified') {
+            } else if (eventType === 'file-removed' || eventType === 'folder-removed' || eventType === 'file-changed') {
                 if (!existsInVault) return; // Not known to Obsidian, nothing to remove/modify
             }
 
-            if (eventType === 'file-created' || eventType === 'modified') {
+            if (eventType === 'file-created' || eventType === 'file-changed') {
                 // Obsidian expects a stat object for created/modified files
                 const stat = await this.app.vault.adapter.stat(normalizedPath);
                 if (stat) {
@@ -118,8 +119,8 @@ export class FileWatcher {
                 await vault.onChange(eventType, normalizedPath, null, null);
             }
 
-            // Trigger a raw event for plugins that listen to it
-            if (eventType === 'modified') {
+            // 'raw' triggers Obsidian's cache refresh (MetadataCache re-read)
+            if (eventType === 'file-changed') {
                 await vault.onChange('raw', normalizedPath, null, null);
             }
         } catch (e) {

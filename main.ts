@@ -499,14 +499,14 @@ export default class FolderBridgePlugin extends Plugin {
 				const list = await this.app.vault.adapter.list(folderPath);
 				for (const file of list.files) {
 					if (this.app.vault.getAbstractFileByPath(file)) {
-						console.log(`[FolderBridge] Removing file from UI: ${file}`);
+						console.debug(`[FolderBridge] Removing file from UI: ${file}`);
 						await vault.onChange('file-removed', file, null, null);
 					}
 				}
 				for (const folder of list.folders) {
 					await recursivelyRemoveVault(folder);
 					if (this.app.vault.getAbstractFileByPath(folder)) {
-						console.log(`[FolderBridge] Removing folder from UI: ${folder}`);
+						console.debug(`[FolderBridge] Removing folder from UI: ${folder}`);
 						await vault.onChange('folder-removed', folder, null, null);
 					}
 				}
@@ -518,7 +518,7 @@ export default class FolderBridgePlugin extends Plugin {
 		await recursivelyRemoveVault(nPath);
 
 		try {
-			console.log(`[FolderBridge] Removing root mount folder from UI: ${nPath}`);
+			console.debug(`[FolderBridge] Removing root mount folder from UI: ${nPath}`);
 			await vault.onChange('folder-removed', nPath, null, null);
 		} catch (e) {
 			console.debug('FolderBridge: vault.onChange(folder-removed) unavailable', e);
@@ -897,6 +897,11 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 
 						await this.plugin.saveSettings();
 						this.plugin.pathMapper.update(this.plugin.settings.mountPoints, this.plugin.settings.deviceId);
+						// Restart the file watcher so it tracks the new real path
+						if (mount.enabled) {
+							this.plugin.fileWatcher?.stopWatching(mount);
+							this.plugin.fileWatcher?.startWatching(mount);
+						}
 						this.display();
 						new Notice(`FolderBridge: Path overridden for this device.`);
 					}
