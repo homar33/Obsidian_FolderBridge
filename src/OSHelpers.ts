@@ -127,7 +127,16 @@ export function realPathToResourceUrl(realPath: string): string {
 	const forward = realPath.split(path.sep).join('/');
 	// Ensure there is exactly one leading slash after the protocol
 	const withSlash = forward.startsWith('/') ? forward : '/' + forward;
-	return `app://local${withSlash}`;
+	
+	// Obsidian 1.5+ uses app://local/ for local files, but requires proper URL encoding
+	// for spaces and special characters in the path.
+	// We don't encode the drive letter colon (e.g. D:)
+	const encodedPath = withSlash.split('/').map(segment => {
+		if (segment.match(/^[a-zA-Z]:$/)) return segment;
+		return encodeURIComponent(segment);
+	}).join('/');
+	
+	return `app://local${encodedPath}`;
 }
 
 // ---------------------------------------------------------------------------
