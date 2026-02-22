@@ -161,12 +161,12 @@ export function realPathToResourceUrl(realPath: string): string {
 	// Add a cache-busting query string based on file modification time if possible,
 	// or just use the current time to ensure images refresh if changed.
 	// Actually, for now, just returning the path is enough.
-	
+
 	// [BUGFIX_20260222] Obsidian's app:// protocol requires the path to be formatted
 	// exactly like a file:// URL path. On Windows, this means it needs to be
 	// app://${appId}/local/C:/path/to/file or app://${appId}/C:/path/to/file
 	// Let's try using the built-in obsidian function if available, otherwise fallback.
-	
+
 	if (globalApp && typeof globalApp.vault.adapter.getResourcePath === 'function') {
 		// We can't pass the real path to getResourcePath because it expects a vault-relative path.
 		// But we can use the internal file URL conversion if we can find it.
@@ -174,17 +174,17 @@ export function realPathToResourceUrl(realPath: string): string {
 		// or just the absolute path depending on the version.
 		// In newer versions, it's `app://${appId}/local/${absolutePath}`
 		// Let's try the `/local/` prefix.
-		
+
 		// Actually, let's look at how Obsidian generates resource paths.
 		// It usually looks like: app://<appId>/local/C:/Users/...
 		// Let's try adding /local/ before the path.
-		
+
 		// Wait, let's check if the path already has /local/
 		// If not, let's add it.
-		
+
 		// Let's just use the file:// URL format and replace file:// with app://${appId}/local/
 		// or app://${appId}/
-		
+
 		// Let's try app://${appId}/local${finalPath}
 		return `app://${appId}/local${finalPath}`;
 	}

@@ -350,6 +350,7 @@ export class VirtualAdapter {
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
 				await fs.promises.writeFile(realPath, data, 'utf8');
+				return;
 			} catch (e) {
 				const errorMsg = `FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
 				console.error(`[FolderBridge] write failed for "${realPath}":`, e, errorMsg);
