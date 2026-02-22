@@ -157,7 +157,8 @@ export class VirtualAdapter {
 					mtime: s.mtimeMs,
 					size: s.size,
 				};
-			} catch {
+			} catch (e) {
+				console.debug(`[FolderBridge] stat failed for "${realPath}":`, e);
 				return null;
 			}
 		}
@@ -292,7 +293,14 @@ export class VirtualAdapter {
 			this.assertAllowed(realPath);
 			try {
 				return await fs.promises.readFile(realPath, 'utf8');
-			} catch (e) {
+			} catch (e: any) {
+				console.error(`[FolderBridge] read failed for "${realPath}":`, e);
+				// Obsidian expects ENOENT for missing files
+				if (e.code === 'ENOENT') {
+					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
+					(err as any).code = 'ENOENT';
+					throw err;
+				}
 				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'read')}`);
 			}
 		}
@@ -309,7 +317,12 @@ export class VirtualAdapter {
 				const buf = await fs.promises.readFile(realPath);
 				// Return a proper ArrayBuffer (buf.buffer may be a shared Buffer pool slice)
 				return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-			} catch (e) {
+			} catch (e: any) {
+				if (e.code === 'ENOENT') {
+					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
+					(err as any).code = 'ENOENT';
+					throw err;
+				}
 				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'readBinary')}`);
 			}
 		}
