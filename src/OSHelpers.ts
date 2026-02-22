@@ -8,10 +8,10 @@ import { OSPlatform } from './types';
 
 export function getPlatform(): OSPlatform {
 	switch (process.platform) {
-		case 'win32':  return 'windows';
-		case 'linux':  return 'linux';
+		case 'win32': return 'windows';
+		case 'linux': return 'linux';
 		case 'darwin': return 'mac';
-		default:       return 'unknown';
+		default: return 'unknown';
 	}
 }
 
@@ -125,9 +125,11 @@ export function normalizeRealPath(realPath: string): string {
 export function realPathToResourceUrl(realPath: string): string {
 	// Electron expects forward slashes even on Windows
 	const forward = realPath.split(path.sep).join('/');
-	// Ensure there is exactly one leading slash after the protocol
+
+	// For Windows paths like D:\path, we need to ensure it starts with a slash
+	// so it becomes /D:/path, which then becomes app://local/D:/path
 	const withSlash = forward.startsWith('/') ? forward : '/' + forward;
-	
+
 	// Obsidian 1.5+ uses app://local/ for local files, but requires proper URL encoding
 	// for spaces and special characters in the path.
 	// We don't encode the drive letter colon (e.g. D:)
@@ -135,8 +137,18 @@ export function realPathToResourceUrl(realPath: string): string {
 		if (segment.match(/^[a-zA-Z]:$/)) return segment;
 		return encodeURIComponent(segment);
 	}).join('/');
-	
-	return `app://local${encodedPath}`;
+
+	// Obsidian's app://local protocol requires the path to be prefixed with the drive letter
+	// but without the colon, or with a specific format depending on the OS.
+	// Actually, the issue is that Obsidian's app://local protocol expects the path to be 
+	// exactly as it would be in a file:// URL, but with app://local instead.
+	// On Windows, this means it needs an extra slash at the beginning: app://local/D:/...
+	// Let's ensure it has exactly one slash before the drive letter.
+
+	const finalPath = encodedPath.startsWith('/') ? encodedPath : '/' + encodedPath;
+
+	console.log(`[FolderBridge] realPathToResourceUrl: "${realPath}" -> "app://local${finalPath}"`);
+	return `app://local${finalPath}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,12 +266,12 @@ export function translateFsError(err: NodeJS.ErrnoException, op: string): string
 		case 'EPERM':
 			return getPlatform() === 'windows'
 				? `Operation not permitted on ${p}. On Windows, creating symbolic links ` +
-					`requires Developer Mode (Settings → System → For Developers) or administrator rights.`
+				`requires Developer Mode (Settings → System → For Developers) or administrator rights.`
 				: `Operation not permitted on ${p}. Check file permissions or ownership.`;
 		case 'ENAMETOOLONG':
 			return getPlatform() === 'windows'
 				? `Path exceeds the Windows 260-character limit. Enable Long Paths in ` +
-					`Windows Settings → System → For Developers → Long Paths, or use a shorter path.`
+				`Windows Settings → System → For Developers → Long Paths, or use a shorter path.`
 				: `Path name is too long for the filesystem.`;
 		case 'EBUSY':
 			return `${p} is locked by another process. Close any programs using it and try again.`;
