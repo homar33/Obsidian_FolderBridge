@@ -294,17 +294,25 @@ export class VirtualAdapter {
 	async write(normalizedPath: string, data: string, options?: unknown): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			console.debug(`[FolderBridge] write: found mount for "${normalizedPath}"`);
+
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot write to ignored path "${normalizedPath}"`);
+
 			const realPath = this.toReal(normalizedPath, mount);
+			console.debug(`[FolderBridge] write: resolved to real path "${realPath}"`);
+
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] write → ${realPath}`); return; }
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
-				return await fs.promises.writeFile(realPath, data, 'utf8');
+				await fs.promises.writeFile(realPath, data, 'utf8');
+				console.debug(`[FolderBridge] write: successfully wrote to "${realPath}"`);
 			} catch (e) {
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`);
+				const errorMsg = `FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
+				console.error(`[FolderBridge] write failed for "${realPath}":`, e, errorMsg);
+				throw new Error(errorMsg);
 			}
 		}
 		return this.orig().write(normalizedPath, data, options);
@@ -382,19 +390,37 @@ export class VirtualAdapter {
 	async mkdir(normalizedPath: string): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
+			console.debug(`[FolderBridge] mkdir: found mount for "${normalizedPath}"`, {
+				mount: mount.virtualPath,
+				readOnly: mount.readOnly
+			});
+
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot create ignored path "${normalizedPath}"`);
+
 			const realPath = this.toReal(normalizedPath, mount);
+			console.debug(`[FolderBridge] mkdir: resolved to real path "${realPath}"`);
+
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
-			if (this.dryRun) { console.log(`[FolderBridge DryRun] mkdir → ${realPath}`); return; }
+
+			if (this.dryRun) {
+				console.log(`[FolderBridge DryRun] mkdir → ${realPath}`);
+				return;
+			}
+
 			try {
 				await fs.promises.mkdir(realPath, { recursive: true });
+				console.debug(`[FolderBridge] mkdir: successfully created "${realPath}"`);
 			} catch (e) {
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'mkdir')}`);
+				const errorMsg = `FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'mkdir')}`;
+				console.error(`[FolderBridge] mkdir failed for "${realPath}":`, e, errorMsg);
+				throw new Error(errorMsg);
 			}
 			return;
 		}
+
+		console.debug(`[FolderBridge] mkdir: no mount found for "${normalizedPath}", delegating to original adapter`);
 		return this.orig().mkdir(normalizedPath);
 	}
 
