@@ -182,9 +182,20 @@ export class VirtualAdapter {
 	async list(normalizedPath: string): Promise<{ files: string[]; folders: string[] }> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (this.isPathIgnored(normalizedPath, mount)) return { files: [], folders: [] };
+			console.debug(`[FolderBridge] list: found mount for "${normalizedPath}"`);
+			if (this.isPathIgnored(normalizedPath, mount)) {
+				console.debug(`[FolderBridge] list: path is ignored, returning empty`);
+				return { files: [], folders: [] };
+			}
 			const realPath = this.toReal(normalizedPath, mount);
-			return this.listRealDirectory(realPath, normalizedPath, mount);
+			console.debug(`[FolderBridge] list: resolved to real path "${realPath}"`);
+			try {
+				return await this.listRealDirectory(realPath, normalizedPath, mount);
+			} catch (e) {
+				console.error(`[FolderBridge] list failed for mount "${mount.virtualPath}":`, e);
+				// Return empty instead of throwing to avoid breaking the UI
+				return { files: [], folders: [] };
+			}
 		}
 
 		// Merge real vault listing with injected virtual mount folders
