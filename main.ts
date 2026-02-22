@@ -5,7 +5,7 @@ import { VirtualAdapter } from './src/VirtualAdapter';
 import { SecurityManager } from './src/SecurityManager';
 import { MountManagerModal, getMountStatus, browseFolderOnDisk } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
-import { getPlatform } from './src/OSHelpers';
+import { getPlatform, realPathToResourceUrl } from './src/OSHelpers';
 import { FileWatcher } from './src/FileWatcher';
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,8 @@ export default class FolderBridgePlugin extends Plugin {
 
 	// Preserve original adapter so we can restore it on unload
 	private originalAdapter: unknown = null;
+	// Preserve original vault.getResourcePath so we can restore it on unload
+	private originalVaultGetResourcePath: unknown = null;
 	statusBarItem: HTMLElement | null = null;
 
 	async onload() {
@@ -134,6 +136,13 @@ export default class FolderBridgePlugin extends Plugin {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app.vault as any).adapter = this.originalAdapter;
 			this.originalAdapter = null;
+		}
+
+		// Restore the original vault.getResourcePath
+		if (this.originalVaultGetResourcePath) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(this.app.vault as any).getResourcePath = this.originalVaultGetResourcePath;
+			this.originalVaultGetResourcePath = null;
 		}
 		console.log('FolderBridge unloaded');
 	}
@@ -248,6 +257,25 @@ export default class FolderBridgePlugin extends Plugin {
 				return undefined;
 			},
 		});
+
+		// Obsidian's renderer calls Vault.getResourcePath(TFile) directly — it does NOT
+		// go through the adapter. We must also patch the vault-level method so that
+		// embedded images in mounted folders resolve to the real disk path.
+		this.originalVaultGetResourcePath = vault.getResourcePath?.bind(vault);
+		const pathMapper = this.pathMapper;
+		vault.getResourcePath = (file: TFile): string => {
+			const mount = pathMapper.getMountForPath(file.path);
+			if (mount) {
+				const realPath = pathMapper.toRealPath(file.path, mount);
+				return realPathToResourceUrl(realPath);
+			}
+			// Fallback to original vault method for non-mounted files
+			if (typeof this.originalVaultGetResourcePath === 'function') {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				return (this.originalVaultGetResourcePath as any)(file);
+			}
+			return '';
+		};
 	}
 
 	// ------------------------------------------------------------------

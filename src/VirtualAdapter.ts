@@ -421,6 +421,7 @@ export class VirtualAdapter {
 		if (mount) {
 			// Use the raw real path (no long-path prefix) since this becomes a URL
 			const realPath = this.pathMapper.toRealPath(normalizedPath, mount);
+			console.log(`[FolderBridge] getResourcePath: ${normalizedPath} -> ${realPath}`);
 
 			// Obsidian provides a built-in way to convert a file path to a resource URL
 			// that handles all the platform-specific quirks (like app://local vs capacitor://localhost)
