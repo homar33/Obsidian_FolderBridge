@@ -27,6 +27,7 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 			new Notice('FolderBridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const options: any = {
 			properties: ['openDirectory'],
 			title,
