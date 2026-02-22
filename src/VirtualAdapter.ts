@@ -349,6 +349,7 @@ export class VirtualAdapter {
 	}
 
 	async writeBinary(normalizedPath: string, data: ArrayBuffer, options?: unknown): Promise<void> {
+		console.log(`[FolderBridge] writeBinary() called with path: "${normalizedPath}"`);
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
@@ -368,6 +369,7 @@ export class VirtualAdapter {
 	}
 
 	async append(normalizedPath: string, data: string, options?: unknown): Promise<void> {
+		console.log(`[FolderBridge] append() called with path: "${normalizedPath}"`);
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
@@ -389,6 +391,7 @@ export class VirtualAdapter {
 		fn: (data: string) => string,
 		options?: unknown,
 	): Promise<string> {
+		console.log(`[FolderBridge] process() called with path: "${normalizedPath}"`);
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot process ignored path "${normalizedPath}"`);
@@ -418,6 +421,7 @@ export class VirtualAdapter {
 	// ------------------------------------------------------------------
 
 	async mkdir(normalizedPath: string): Promise<void> {
+		console.log(`[FolderBridge] mkdir() called with path: "${normalizedPath}"`);
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			console.debug(`[FolderBridge] mkdir: found mount for "${normalizedPath}"`, {
