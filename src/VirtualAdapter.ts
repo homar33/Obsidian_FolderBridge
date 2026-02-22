@@ -321,6 +321,7 @@ export class VirtualAdapter {
 	// ------------------------------------------------------------------
 
 	async write(normalizedPath: string, data: string, options?: unknown): Promise<void> {
+		console.log(`[FolderBridge] write() called with path: "${normalizedPath}"`);
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			console.debug(`[FolderBridge] write: found mount for "${normalizedPath}"`);
