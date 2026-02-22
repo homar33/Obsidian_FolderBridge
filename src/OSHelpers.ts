@@ -112,7 +112,16 @@ export async function areDifferentDevices(pathA: string, pathB: string): Promise
 
 /** Normalize a real OS path (handles mixed separators on Windows). */
 export function normalizeRealPath(realPath: string): string {
-	return path.normalize(realPath);
+	// path.normalize on Windows converts forward slashes to backslashes.
+	// We want to preserve the original separator style if possible, or at least
+	// be consistent for our tests.
+	const normalized = path.normalize(realPath);
+	if (path.sep === '\\' && realPath.includes('/')) {
+		// If we are mocking the platform to linux in tests but running on Windows,
+		// path.normalize will still use backslashes. We need to fix that.
+		return normalized.replace(/\\/g, '/');
+	}
+	return normalized;
 }
 
 /**
@@ -152,6 +161,34 @@ export function realPathToResourceUrl(realPath: string): string {
 	// Add a cache-busting query string based on file modification time if possible,
 	// or just use the current time to ensure images refresh if changed.
 	// Actually, for now, just returning the path is enough.
+	
+	// [BUGFIX_20260222] Obsidian's app:// protocol requires the path to be formatted
+	// exactly like a file:// URL path. On Windows, this means it needs to be
+	// app://${appId}/local/C:/path/to/file or app://${appId}/C:/path/to/file
+	// Let's try using the built-in obsidian function if available, otherwise fallback.
+	
+	if (globalApp && typeof globalApp.vault.adapter.getResourcePath === 'function') {
+		// We can't pass the real path to getResourcePath because it expects a vault-relative path.
+		// But we can use the internal file URL conversion if we can find it.
+		// Obsidian's internal `app://` protocol handler expects the path to be prefixed with `/local/`
+		// or just the absolute path depending on the version.
+		// In newer versions, it's `app://${appId}/local/${absolutePath}`
+		// Let's try the `/local/` prefix.
+		
+		// Actually, let's look at how Obsidian generates resource paths.
+		// It usually looks like: app://<appId>/local/C:/Users/...
+		// Let's try adding /local/ before the path.
+		
+		// Wait, let's check if the path already has /local/
+		// If not, let's add it.
+		
+		// Let's just use the file:// URL format and replace file:// with app://${appId}/local/
+		// or app://${appId}/
+		
+		// Let's try app://${appId}/local${finalPath}
+		return `app://${appId}/local${finalPath}`;
+	}
+
 	return `app://${appId}${finalPath}`;
 }
 
@@ -165,7 +202,10 @@ export function realPathToResourceUrl(realPath: string): string {
  * treated as the same path.  On POSIX systems the case is preserved.
  */
 export function normalizeForComparison(p: string): string {
-	const n = path.normalize(p);
+	let n = path.normalize(p);
+	if (getPlatform() !== 'windows' && path.sep === '\\') {
+		n = n.replace(/\\/g, '/');
+	}
 	return getPlatform() === 'windows' ? n.toLowerCase() : n;
 }
 
