@@ -1,0 +1,11 @@
+{
+  "servers": {
+    "code-scalpel": {
+      "command": "uvx",
+      "args": ["codescalpel", "mcp"],
+      "env": {
+        "CODE_SCALPEL_LICENSE_PATH": "${workspaceFolder}/.code-scalpel/license/"
+      }
+    }
+  }
+}

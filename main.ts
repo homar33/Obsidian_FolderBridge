@@ -161,7 +161,10 @@ export default class FolderBridgePlugin extends Plugin {
 			const list = mount.ignoreList || [];
 			for (const pattern of list) {
 				if (pattern.includes('*')) {
-					const regexStr = '^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$';
+					// Use [^/]* instead of .* to prevent ReDoS from user-supplied
+					// patterns like "a*b*" which would produce catastrophic backtracking
+					const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+					const regexStr = '^' + escaped.replace(/\*/g, '[^/]*') + '$';
 					regexes.push(new RegExp(regexStr));
 				} else {
 					strings.push(pattern);
@@ -619,7 +622,12 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 		});
 		syncWarning.style.margin = '0';
 		syncWarning.style.color = 'var(--text-warning)';
-		syncWarning.innerHTML = `<strong>⚠️ Sync Warning:</strong> If you use Obsidian Sync or Syncthing, you <strong>must</strong> add your virtual folder names to your sync ignore list (e.g. <code>.stignore</code> or Obsidian Sync Excluded Folders). Otherwise, your sync engine will try to upload the entire contents of your mounted folders!`;
+		syncWarning.createEl('strong', { text: '⚠️ Sync Warning:' });
+		syncWarning.appendText(' If you use Obsidian Sync or Syncthing, you ');
+		syncWarning.createEl('strong', { text: 'must' });
+		syncWarning.appendText(' add your virtual folder names to your sync ignore list (e.g. ');
+		syncWarning.createEl('code', { text: '.stignore' });
+		syncWarning.appendText(' or Obsidian Sync Excluded Folders). Otherwise, your sync engine will try to upload the entire contents of your mounted folders!');
 
 		// ── Global options ───────────────────────────────────────────────
 		new Setting(containerEl).setName('General').setHeading();
