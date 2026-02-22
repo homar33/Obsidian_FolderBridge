@@ -55,10 +55,31 @@ export class PathMapper {
 		const sorted = [...this.mounts].sort(
 			(a, b) => b.virtualPath.length - a.virtualPath.length
 		);
-		return sorted.find(m => {
+		
+		// Debug: log mount detection attempt
+		if (this.mounts.length > 0) {
+			console.debug(`[FolderBridge PathMapper] getMountForPath("${virtualPath}") -> normalized: "${n}"`);
+			console.debug(`[FolderBridge PathMapper] Available mounts:`, 
+				sorted.map(m => ({ virtualPath: m.virtualPath, normalized: normalizePath(m.virtualPath) }))
+			);
+		}
+		
+		const result = sorted.find(m => {
 			const mv = normalizePath(m.virtualPath);
-			return n === mv || n.startsWith(mv + '/');
+			const matches = n === mv || n.startsWith(mv + '/');
+			if (this.mounts.length > 0) {
+				console.debug(`[FolderBridge PathMapper] Checking "${n}" against mount "${mv}": ${matches ? 'MATCH' : 'no match'}`);
+			}
+			return matches;
 		});
+		
+		if (result) {
+			console.debug(`[FolderBridge PathMapper] Found mount: "${result.virtualPath}"`);
+		} else {
+			console.debug(`[FolderBridge PathMapper] No mount found for "${n}"`);
+		}
+		
+		return result;
 	}
 
 	/** True if virtualPath is a mount root or inside a mount. */
