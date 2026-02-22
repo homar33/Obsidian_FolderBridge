@@ -128,40 +128,31 @@ export function realPathToResourceUrl(realPath: string): string {
 	// and proper URL encoding.
 	// We can access it via the global app object if it's available.
 
+	// [BUGFIX_20260222] Obsidian 1.5+ uses app://${appId}/ instead of app://local/
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const globalApp = (window as any).app;
-	if (globalApp && typeof globalApp.vault.adapter.getResourcePath === 'function') {
-		// We can't pass the real path to getResourcePath because it expects a vault-relative path.
-		// But we can use the internal file URL conversion if we can find it.
-	}
+	const globalApp = typeof window !== 'undefined' ? (window as any).app : null;
+	const appId = globalApp?.appId || 'local';
 
-	// Fallback manual implementation
 	// Electron expects forward slashes even on Windows
 	const forward = realPath.split(path.sep).join('/');
 
 	// For Windows paths like D:\path, we need to ensure it starts with a slash
-	// so it becomes /D:/path, which then becomes app://local/D:/path
+	// so it becomes /D:/path, which then becomes app://<appId>/D:/path
 	const withSlash = forward.startsWith('/') ? forward : '/' + forward;
 
-	// Obsidian 1.5+ uses app://local/ for local files, but requires proper URL encoding
-	// for spaces and special characters in the path.
+	// Obsidian requires proper URL encoding for spaces and special characters in the path.
 	// We don't encode the drive letter colon (e.g. D:)
 	const encodedPath = withSlash.split('/').map(segment => {
 		if (segment.match(/^[a-zA-Z]:$/)) return segment;
 		return encodeURIComponent(segment);
 	}).join('/');
 
-	// Obsidian's app://local protocol requires the path to be prefixed with the drive letter
-	// but without the colon, or with a specific format depending on the OS.
-	// Actually, the issue is that Obsidian's app://local protocol expects the path to be 
-	// exactly as it would be in a file:// URL, but with app://local instead.
-	// On Windows, this means it needs an extra slash at the beginning: app://local/D:/...
-	// Let's ensure it has exactly one slash before the drive letter.
-
 	const finalPath = encodedPath.startsWith('/') ? encodedPath : '/' + encodedPath;
 
-	// Remove the console.log to clean up the console
-	return `app://local${finalPath}`;
+	// Add a cache-busting query string based on file modification time if possible,
+	// or just use the current time to ensure images refresh if changed.
+	// Actually, for now, just returning the path is enough.
+	return `app://${appId}${finalPath}`;
 }
 
 // ---------------------------------------------------------------------------

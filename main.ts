@@ -110,6 +110,8 @@ export default class FolderBridgePlugin extends Plugin {
 		// Obsidian's internal vault file tree so they appear in the file explorer
 		// without requiring a restart.
 		this.app.workspace.onLayoutReady(async () => {
+			// [BUGFIX_20260222] Removed debug log for resource path format
+
 			for (const mount of this.settings.mountPoints.filter(m => m.enabled && (m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts))) {
 				await this.notifyVaultMountAdded(mount);
 			}
@@ -286,7 +288,7 @@ export default class FolderBridgePlugin extends Plugin {
 
 		const mount = this.settings.mountPoints[idx];
 
-		// Remove from vault tree BEFORE removing from pathMapper so stat() still resolves
+		// [BUGFIX_20260222] Remove from vault tree BEFORE removing from pathMapper so stat() still resolves
 		await this.notifyVaultMountRemoved(mount);
 
 		this.settings.mountPoints.splice(idx, 1);
@@ -433,6 +435,10 @@ export default class FolderBridgePlugin extends Plugin {
 	/**
 	 * Remove a virtual mount folder from Obsidian's internal vault index
 	 * so the file explorer stops showing it immediately after removal.
+	 * 
+	 * [BUGFIX_20260222] This method must be called BEFORE the mount is removed
+	 * from the PathMapper, otherwise adapter.list() will fail to resolve the
+	 * virtual paths to real paths, and the files will remain orphaned in the UI.
 	 */
 	async notifyVaultMountRemoved(mount: MountPoint): Promise<void> {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -448,12 +454,14 @@ export default class FolderBridgePlugin extends Plugin {
 				const list = await this.app.vault.adapter.list(folderPath);
 				for (const file of list.files) {
 					if (this.app.vault.getAbstractFileByPath(file)) {
+						console.log(`[FolderBridge] Removing file from UI: ${file}`);
 						await vault.onChange('file-removed', file, null, null);
 					}
 				}
 				for (const folder of list.folders) {
 					await recursivelyRemoveVault(folder);
 					if (this.app.vault.getAbstractFileByPath(folder)) {
+						console.log(`[FolderBridge] Removing folder from UI: ${folder}`);
 						await vault.onChange('folder-removed', folder, null, null);
 					}
 				}
@@ -465,6 +473,7 @@ export default class FolderBridgePlugin extends Plugin {
 		await recursivelyRemoveVault(nPath);
 
 		try {
+			console.log(`[FolderBridge] Removing root mount folder from UI: ${nPath}`);
 			await vault.onChange('folder-removed', nPath, null, null);
 		} catch (e) {
 			console.debug('FolderBridge: vault.onChange(folder-removed) unavailable', e);
@@ -792,15 +801,23 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 							new Notice('FolderBridge: Cannot enable a mount created on a different device.');
 							return;
 						}
+
+						// [BUGFIX_20260222] Fix UI refresh bug when unmounting
+						// We must call notifyVaultMountRemoved BEFORE updating pathMapper
+						// so that adapter.list() can still resolve the virtual paths to real paths
+						// and find the files to remove from Obsidian's internal fileMap.
+						if (!val) {
+							await this.plugin.notifyVaultMountRemoved(mount);
+						}
+
 						mount.enabled = val;
 						await this.plugin.saveSettings();
 						this.plugin.pathMapper.update(this.plugin.settings.mountPoints, this.plugin.settings.deviceId);
 						this.plugin.updateStatusBar();
-						// Inject into / remove from Obsidian's vault tree live
+
+						// Inject into Obsidian's vault tree live
 						if (val) {
 							await this.plugin.notifyVaultMountAdded(mount);
-						} else {
-							await this.plugin.notifyVaultMountRemoved(mount);
 						}
 					});
 
