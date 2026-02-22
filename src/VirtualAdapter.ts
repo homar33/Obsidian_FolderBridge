@@ -213,16 +213,26 @@ export class VirtualAdapter {
 	): Promise<{ files: string[]; folders: string[] }> {
 		const files: string[] = [];
 		const folders: string[] = [];
+		const MAX_ENTRIES = 10000; // Safety limit to prevent UI freeze on huge directories
 
 		let entries: fs.Dirent[];
 		try {
 			entries = await fs.promises.readdir(realDirPath, { withFileTypes: true });
 		} catch (e) {
 			const msg = translateFsError(e as NodeJS.ErrnoException, 'list');
+			console.error(`[FolderBridge] Failed to list directory "${realDirPath}":`, msg);
 			throw new Error(`FolderBridge: Cannot list "${realDirPath}": ${msg}`);
 		}
 
-		for (const entry of entries) {
+		console.debug(`[FolderBridge] listRealDirectory: found ${entries.length} entries in "${realDirPath}"`);
+
+		// Warn if directory is extremely large
+		if (entries.length > MAX_ENTRIES) {
+			console.warn(`[FolderBridge] WARNING: Directory "${realDirPath}" contains ${entries.length} items. Plate Folder Bridge limits display to ${MAX_ENTRIES} items for performance.`);
+		}
+
+		for (let i = 0; i < entries.length && i < MAX_ENTRIES; i++) {
+			const entry = entries[i];
 			if (this.isIgnored(entry.name, mount)) continue;
 
 			const virtualChild = virtualParentPath
@@ -234,20 +244,28 @@ export class VirtualAdapter {
 			} else if (entry.isFile()) {
 				files.push(virtualChild);
 			} else if (entry.isSymbolicLink()) {
-				// Resolve symlinks to determine actual type
-				try {
-					const s = await fs.promises.stat(path.join(realDirPath, entry.name));
-					if (s.isDirectory()) {
-						folders.push(virtualChild);
-					} else {
-						files.push(virtualChild);
+				// For very large directories, skip symlink resolution to avoid delay
+				if (entries.length > 1000) {
+					console.debug(`[FolderBridge] Skipping symlink resolution in large directory (${entries.length} items)`);
+					// Assume it's a file (safer default)
+					files.push(virtualChild);
+				} else {
+					// Resolve symlinks to determine actual type
+					try {
+						const s = await fs.promises.stat(path.join(realDirPath, entry.name));
+						if (s.isDirectory()) {
+							folders.push(virtualChild);
+						} else {
+							files.push(virtualChild);
+						}
+					} catch {
+						// Broken symlink or permission error – skip silently
 					}
-				} catch {
-					// Broken symlink or permission error – skip silently
 				}
 			}
 		}
 
+		console.debug(`[FolderBridge] listRealDirectory: returning ${folders.length} folders and ${files.length} files`);
 		return { files, folders };
 	}
 
