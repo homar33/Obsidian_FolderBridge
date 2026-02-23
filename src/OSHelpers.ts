@@ -132,25 +132,19 @@ export function normalizeRealPath(realPath: string): string {
  * bypasses the vault root restriction.
  */
 export function realPathToResourceUrl(realPath: string): string {
-	// Obsidian provides a built-in way to convert a file path to a resource URL
-	// that handles all the platform-specific quirks (like app://local vs capacitor://localhost)
-	// and proper URL encoding.
-	// We can access it via the global app object if it's available.
-
-	// [BUGFIX_20260222] Obsidian 1.5+ uses app://${appId}/ instead of app://local/
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const globalApp = typeof window !== 'undefined' ? (window as any).app : null;
-	const appId = globalApp?.appId || 'local';
+	// app://local/ is the Electron protocol handler that serves ANY local file
+	// path, regardless of whether it is inside the vault.  Do NOT use
+	// window.app.appId here — that vault-hash host only resolves paths that are
+	// children of the vault root, causing ERR_FILE_NOT_FOUND for external mounts.
 
 	// Electron expects forward slashes even on Windows
 	const forward = realPath.split(path.sep).join('/');
 
-	// For Windows paths like D:\path, we need to ensure it starts with a slash
-	// so it becomes /D:/path, which then becomes app://<appId>/D:/path
+	// For Windows paths like D:\path, ensure a leading slash → /D:/path
 	const withSlash = forward.startsWith('/') ? forward : '/' + forward;
 
-	// Obsidian requires proper URL encoding for spaces and special characters in the path.
-	// We don't encode the drive letter colon (e.g. D:)
+	// Percent-encode each path segment but leave the Windows drive letter colon
+	// (e.g. "C:") unencoded so Electron's handler can parse it correctly.
 	const encodedPath = withSlash.split('/').map(segment => {
 		if (segment.match(/^[a-zA-Z]:$/)) return segment;
 		return encodeURIComponent(segment);
@@ -158,15 +152,7 @@ export function realPathToResourceUrl(realPath: string): string {
 
 	const finalPath = encodedPath.startsWith('/') ? encodedPath : '/' + encodedPath;
 
-	// Add a cache-busting query string based on file modification time if possible,
-	// or just use the current time to ensure images refresh if changed.
-	// Actually, for now, just returning the path is enough.
-
-	// [BUGFIX_20260222] Obsidian's app:// protocol requires the path to be formatted
-	// exactly like a file:// URL path. On Windows, this means it needs to be
-	// app://${appId}/C:/path/to/file
-
-	return `app://${appId}${finalPath}`;
+	return `app://local${finalPath}`;
 }
 
 // ---------------------------------------------------------------------------
