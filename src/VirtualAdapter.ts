@@ -31,7 +31,7 @@ export class VirtualAdapter {
 	private security: SecurityManager;
 	private dryRun: boolean;
 	private onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>;
-	private isIgnored: (name: string, mount: MountPoint) => boolean;
+	private isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean;
 
 	constructor(
 		original: unknown,
@@ -39,7 +39,7 @@ export class VirtualAdapter {
 		security: SecurityManager,
 		dryRun = false,
 		onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>,
-		isIgnored: (name: string, mount: MountPoint) => boolean
+		isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean
 	) {
 		this.original = original;
 		this.pathMapper = pathMapper;
@@ -101,9 +101,15 @@ export class VirtualAdapter {
 	}
 
 	private isPathIgnored(normalizedPath: string, mount: MountPoint): boolean {
+		// Compute the path relative to the mount's virtual root for path-style patterns
+		const mountVirtual = normalizePath(mount.virtualPath);
+		const mountRelativePath: string | undefined = normalizedPath.startsWith(mountVirtual + '/')
+			? normalizedPath.slice(mountVirtual.length + 1)
+			: (normalizedPath === mountVirtual ? '' : undefined);
+
 		const parts = normalizedPath.split('/');
 		for (const part of parts) {
-			if (this.isIgnored(part, mount)) return true;
+			if (part && this.isIgnored(part, mount, mountRelativePath)) return true;
 		}
 		return false;
 	}
@@ -232,6 +238,12 @@ export class VirtualAdapter {
 		const folders: string[] = [];
 		const MAX_ENTRIES = 10000; // Safety limit to prevent UI freeze on huge directories
 
+		// Pre-compute the mount-relative parent path for path-style ignore patterns
+		const mountVirtual = normalizePath(mount.virtualPath);
+		const mountRelativeParent: string | undefined = virtualParentPath.startsWith(mountVirtual + '/')
+			? virtualParentPath.slice(mountVirtual.length + 1)
+			: (virtualParentPath === mountVirtual ? '' : undefined);
+
 		let entries: fs.Dirent[];
 		try {
 			entries = await fs.promises.readdir(realDirPath, { withFileTypes: true });
@@ -250,7 +262,12 @@ export class VirtualAdapter {
 
 		for (let i = 0; i < entries.length && i < MAX_ENTRIES; i++) {
 			const entry = entries[i];
-			if (this.isIgnored(entry.name, mount)) continue;
+			// Build the mount-relative path for this entry so path-style patterns work
+			const entryMountRelativePath: string | undefined =
+				mountRelativeParent !== undefined
+					? (mountRelativeParent ? `${mountRelativeParent}/${entry.name}` : entry.name)
+					: undefined;
+			if (this.isIgnored(entry.name, mount, entryMountRelativePath)) continue;
 
 			const virtualChild = virtualParentPath
 				? normalizePath(virtualParentPath + '/' + entry.name)

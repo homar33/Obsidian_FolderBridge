@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Edit mount in-place**: "Edit" button on each mount row opens the Add Mount modal pre-populated with the current values. Virtual path, real path, label, and read-only flag can all be changed without removing and re-adding the mount. The vault tree and file watcher are updated live on save.
 - **Drag-drop reordering**: Mount rows in the Settings panel are now draggable. Drag any row to a new position to reorder mounts. The order is persisted immediately.
 - **"Move mount to…" context menu**: Right-clicking a mount's root folder in the file explorer shows a "Move mount to…" item. Selecting it opens the vault folder picker and relocates the mount's virtual path — live, no restart needed.
+- **"Browse…" button in ignore list**: A "Browse…" button next to the ignore-list text input opens the OS folder picker rooted at the selected mount's real path. Picking a folder fills the input with the path relative to the mount root (e.g., `assets/vendor/plantuml-stdlib`).
+- **Path-relative ignore patterns**: Ignore list entries that contain a `/` (e.g., `assets/vendor`) are now matched as path-prefix patterns against the item's location within the mount, not just the leaf name. This lets you ignore a deeply nested folder without ignoring every folder with the same name across the whole mount.
 
 ## [0.4.4] - 2026-02-23
 

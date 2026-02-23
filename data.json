@@ -15,7 +15,7 @@
       ]
     },
     {
-      "virtualPath": "Eski-Enterprises/3D Tech Solutions/tescolopio",
+      "virtualPath": "tescolopio",
       "realPath": "C:\\Users\\DigitalByooki\\OneDrive\\tescolopio",
       "enabled": true,
       "readOnly": false,
@@ -25,7 +25,8 @@
       "ignoreList": [
         ".git",
         "node_modules",
-        ".obsidian"
+        ".obsidian",
+        "plantuml"
       ]
     }
   ],

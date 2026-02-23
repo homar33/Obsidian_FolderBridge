@@ -8,7 +8,7 @@ import * as fs from 'fs';
 export class FileWatcher {
     private app: App;
     private pathMapper: PathMapper;
-    private isIgnored: (name: string, mount: MountPoint) => boolean;
+    private isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean;
     private watchers: Map<string, chokidar.FSWatcher> = new Map();
 
     /**
@@ -19,7 +19,7 @@ export class FileWatcher {
     private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
     private static readonly DEBOUNCE_MS = 300;
 
-    constructor(app: App, pathMapper: PathMapper, isIgnored: (name: string, mount: MountPoint) => boolean) {
+    constructor(app: App, pathMapper: PathMapper, isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean) {
         this.app = app;
         this.pathMapper = pathMapper;
         this.isIgnored = isIgnored;
@@ -42,8 +42,15 @@ export class FileWatcher {
                 const name = path.basename(testPath);
                 if (name.startsWith('.') || name === 'node_modules') return true;
 
+                // Compute mount-relative real path for path-style ignore patterns
+                const normalizedTest = testPath.replace(/\\/g, '/');
+                const normalizedMountReal = realPath.replace(/\\/g, '/').replace(/\/$/, '');
+                const mountRelativePath: string | undefined = normalizedTest.startsWith(normalizedMountReal + '/')
+                    ? normalizedTest.slice(normalizedMountReal.length + 1)
+                    : undefined;
+
                 // Apply user-defined ignore rules
-                if (this.isIgnored(name, mount)) return true;
+                if (this.isIgnored(name, mount, mountRelativePath)) return true;
 
                 return false;
             },

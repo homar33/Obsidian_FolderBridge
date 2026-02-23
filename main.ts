@@ -174,12 +174,13 @@ export default class FolderBridgePlugin extends Plugin {
 	// Helpers
 	// ------------------------------------------------------------------
 
-	private ignoreCache = new Map<string, { strings: string[], regexes: RegExp[] }>();
+	private ignoreCache = new Map<string, { nameStrings: string[], pathStrings: string[], regexes: RegExp[] }>();
 
 	private updateIgnoreCache() {
 		this.ignoreCache.clear();
 		for (const mount of this.settings.mountPoints) {
-			const strings: string[] = [];
+			const nameStrings: string[] = [];
+			const pathStrings: string[] = []; // patterns that contain '/' — matched as path prefix
 			const regexes: RegExp[] = [];
 			const list = mount.ignoreList || [];
 			for (const pattern of list) {
@@ -189,18 +190,41 @@ export default class FolderBridgePlugin extends Plugin {
 					const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
 					const regexStr = '^' + escaped.replace(/\*/g, '[^/]*') + '$';
 					regexes.push(new RegExp(regexStr));
+				} else if (pattern.includes('/')) {
+					// Path-relative pattern: normalize slashes and store
+					pathStrings.push(normalizePath(pattern));
 				} else {
-					strings.push(pattern);
+					nameStrings.push(pattern);
 				}
 			}
-			this.ignoreCache.set(mount.id, { strings, regexes });
+			this.ignoreCache.set(mount.id, { nameStrings, pathStrings, regexes });
 		}
 	}
 
-	isNameIgnored(name: string, mount: MountPoint): boolean {
+	/**
+	 * Returns true when `name` (the leaf filename/dirname) or `mountRelativePath`
+	 * (the path relative to the mount root, e.g. "assets/vendor/cache") should
+	 * be excluded from the vault view and file watcher.
+	 *
+	 * Pattern types in ignoreList:
+	 *   - No slash, no wildcard  → matched against the leaf name only
+	 *     (e.g. ".git", "node_modules")
+	 *   - Contains "/"           → matched as a prefix against mountRelativePath
+	 *     (e.g. "assets/vendor" ignores that subtree and nothing else named "assets")
+	 *   - Contains "*"           → treated as a glob matched against the leaf name
+	 *     (e.g. "*.tmp", "~$*")
+	 */
+	isNameIgnored(name: string, mount: MountPoint, mountRelativePath?: string): boolean {
 		const cache = this.ignoreCache.get(mount.id);
 		if (!cache) return false;
-		if (cache.strings.includes(name)) return true;
+		// Path-prefix patterns: only applicable when the full relative path is known
+		if (mountRelativePath) {
+			for (const pathPat of cache.pathStrings) {
+				if (mountRelativePath === pathPat || mountRelativePath.startsWith(pathPat + '/')) return true;
+			}
+		}
+		// Name patterns and globs
+		if (cache.nameStrings.includes(name)) return true;
 		for (const regex of cache.regexes) {
 			if (regex.test(name)) return true;
 		}
@@ -492,9 +516,13 @@ export default class FolderBridgePlugin extends Plugin {
 
 				for (const folder of list.folders) {
 					const folderName = folder.split('/').pop() || '';
+					const mountVirtual = normalizePath(mount.virtualPath);
+					const folderMountRelPath = folder.startsWith(mountVirtual + '/')
+						? folder.slice(mountVirtual.length + 1)
+						: undefined;
 
 					// Skip ignored folders
-					if (this.isNameIgnored(folderName, mount)) continue;
+					if (this.isNameIgnored(folderName, mount, folderMountRelPath)) continue;
 
 					// Skip hidden folders and node_modules to prevent massive performance hits
 					if (folderName.startsWith('.') || folderName === 'node_modules') continue;
@@ -519,9 +547,13 @@ export default class FolderBridgePlugin extends Plugin {
 					}
 
 					const fileName = file.split('/').pop() || '';
+					const mountVirtualF = normalizePath(mount.virtualPath);
+					const fileMountRelPath = file.startsWith(mountVirtualF + '/')
+						? file.slice(mountVirtualF.length + 1)
+						: undefined;
 
 					// Skip ignored files
-					if (this.isNameIgnored(fileName, mount)) continue;
+					if (this.isNameIgnored(fileName, mount, fileMountRelPath)) continue;
 
 					// Skip hidden files
 					if (fileName.startsWith('.')) continue;
@@ -857,8 +889,28 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 					addContainer.style.marginTop = '12px';
 					addContainer.style.gap = '8px';
 
-					const inputEl = addContainer.createEl('input', { type: 'text', placeholder: 'Add new item (e.g. .DS_Store)' });
+					const inputEl = addContainer.createEl('input', { type: 'text', placeholder: 'Name (e.g. .DS_Store) or path (e.g. vendor/cache)' });
 					inputEl.style.flexGrow = '1';
+
+					// Browse mount button — opens disk picker rooted at the mount's real path
+					const browseBtn = addContainer.createEl('button', { text: 'Browse…' });
+					browseBtn.onclick = async () => {
+						const selected = await browseFolderOnDisk(
+							`Select folder to ignore in "${selectedMount.label || selectedMount.virtualPath}"`,
+							selectedMount.realPath,
+						);
+						if (selected) {
+							// Normalize to forward slashes and strip mount real-path prefix
+							const mountReal = selectedMount.realPath.replace(/\\/g, '/').replace(/\/$/, '');
+							const sel = selected.replace(/\\/g, '/').replace(/\/$/, '');
+							const relative = sel.startsWith(mountReal + '/')
+								? sel.slice(mountReal.length + 1)
+								: sel;
+							// Pre-fill the text input so the user can review/edit before adding
+							inputEl.value = relative;
+							inputEl.focus();
+						}
+					};
 
 					const addBtn = addContainer.createEl('button', { text: 'Add' });
 					addBtn.onclick = async () => {
