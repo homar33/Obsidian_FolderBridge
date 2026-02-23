@@ -172,6 +172,63 @@ export function realPathToResourceUrl(realPath: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Data-URI image serving
+// ---------------------------------------------------------------------------
+
+/**
+ * MIME types for file extensions that we can serve as data: URIs.
+ * Only binary formats that Obsidian's renderer (and PDF.js) can display inline.
+ */
+const DATA_URI_MIME: Record<string, string> = {
+	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.gif': 'image/gif',
+	'.webp': 'image/webp',
+	'.svg': 'image/svg+xml',
+	'.bmp': 'image/bmp',
+	'.ico': 'image/x-icon',
+	'.avif': 'image/avif',
+	'.tiff': 'image/tiff',
+	'.tif': 'image/tiff',
+	'.pdf': 'application/pdf',
+};
+
+/** Maximum file size that we will read synchronously to produce a data: URI. */
+const MAX_SYNC_DATA_URI_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/**
+ * Synchronously read a file and return it as a `data:` URI string.
+ *
+ * Returns `null` when:
+ *   - The file extension is not in the allow-list above
+ *   - The file is larger than MAX_SYNC_DATA_URI_BYTES
+ *   - Any fs error occurs (file missing, permission denied, cloud placeholder, …)
+ *
+ * This is used by the vault.getResourcePath patch so that images and PDFs
+ * in mounted (external) folders can be served in Obsidian's renderer.
+ *
+ * Background: Modern Obsidian uses `app://<vaultId>/` instead of the
+ * previously documented `app://local/` protocol.  The vault-id scheme is
+ * restricted to files inside the vault root, so arbitrary external paths
+ * resolve to ERR_FILE_NOT_FOUND.  A data: URI is the only reliable,
+ * CSP-compliant way to embed external binary assets in the renderer.
+ */
+export function tryReadAsDataUri(realPath: string): string | null {
+	const ext = path.extname(realPath).toLowerCase();
+	const mime = DATA_URI_MIME[ext];
+	if (!mime) return null;
+	try {
+		const stat = fs.statSync(realPath);
+		if (stat.size > MAX_SYNC_DATA_URI_BYTES) return null;
+		const data = fs.readFileSync(realPath);
+		return `data:${mime};base64,${data.toString('base64')}`;
+	} catch {
+		return null;
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Windows path utilities
 // ---------------------------------------------------------------------------
 

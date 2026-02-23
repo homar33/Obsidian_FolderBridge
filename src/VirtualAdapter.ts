@@ -6,6 +6,7 @@ import { SecurityManager } from './SecurityManager';
 import { MountPoint } from './types';
 import {
 	realPathToResourceUrl,
+	tryReadAsDataUri,
 	ensureLongPathPrefix,
 	isReservedWindowsFilename,
 	translateFsError,
@@ -436,11 +437,12 @@ export class VirtualAdapter {
 	getResourcePath(normalizedPath: string): string {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			// Use the raw real path (no long-path prefix) since this becomes a URL.
 			// NOTE: Vault.getResourcePath(TFile) is patched separately in main.ts because
 			// Obsidian's renderer calls the vault-level method directly, not this adapter method.
+			// Modern Obsidian (app://<vaultId>/) only serves vault-relative paths, so
+			// external mounts must be served as data: URIs instead.
 			const realPath = this.pathMapper.toRealPath(normalizedPath, mount);
-			return realPathToResourceUrl(realPath);
+			return tryReadAsDataUri(realPath) ?? realPathToResourceUrl(realPath);
 		}
 		return this.orig().getResourcePath(normalizedPath);
 	}

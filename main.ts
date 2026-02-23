@@ -5,7 +5,8 @@ import { VirtualAdapter } from './src/VirtualAdapter';
 import { SecurityManager } from './src/SecurityManager';
 import { MountManagerModal, getMountStatus, browseFolderOnDisk } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
-import { getPlatform, realPathToResourceUrl } from './src/OSHelpers';
+import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
+import * as path from 'path';
 import { FileWatcher } from './src/FileWatcher';
 
 // ---------------------------------------------------------------------------
@@ -270,7 +271,11 @@ export default class FolderBridgePlugin extends Plugin {
 			const mount = pathMapper.getMountForPath(file.path);
 			if (mount) {
 				const realPath = pathMapper.toRealPath(file.path, mount);
-				return realPathToResourceUrl(realPath);
+				// Modern Obsidian uses app://<vaultId>/ which is restricted to
+				// vault-relative paths — external mounts get ERR_FILE_NOT_FOUND.
+				// Serve supported binary assets (images, PDFs) as data: URIs instead.
+				// For large or unsupported files fall back to app://local/ (legacy).
+				return tryReadAsDataUri(realPath) ?? realPathToResourceUrl(realPath);
 			}
 			// Fallback to original vault method for non-mounted files
 			if (typeof this.originalVaultGetResourcePath === 'function') {
