@@ -2,7 +2,7 @@
  * A single virtual mount point: maps a vault-relative virtual path
  * to an absolute real filesystem path.
  */
-export type MountType = 'local' | 'webdav';
+export type MountType = 'local' | 'webdav' | 'vault';
 
 export interface MountPoint {
 	id: string;            // Unique identifier (generated at creation)

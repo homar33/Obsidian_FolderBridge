@@ -177,24 +177,65 @@ export class MountManagerModal extends Modal {
 		contentEl.empty();
 		contentEl.createEl('h2', { text: this.editMount ? 'Edit Mount Point' : 'Add Mount Point' });
 
+		const platform = getPlatform();
+		const wsl = isWSL();
+
 		// ── Mount type selector ────────────────────────────────────────────
 		const localSection = contentEl.createDiv();
+		const vaultSection = contentEl.createDiv();
 		const webdavSection = contentEl.createDiv();
 
 		const toggleSections = (type: MountType) => {
 			this.mountType = type;
 			localSection.style.display = type === 'local' ? '' : 'none';
+			vaultSection.style.display = type === 'vault' ? '' : 'none';
 			webdavSection.style.display = type === 'webdav' ? '' : 'none';
 		};
 
 		new Setting(contentEl)
 			.setName('Mount type')
-			.setDesc('Choose between a local filesystem folder or a WebDAV server (Nextcloud, ownCloud, generic WebDAV)')
+			.setDesc('Choose between a local filesystem folder, another Obsidian vault, or a WebDAV server')
 			.addDropdown(drop => drop
 				.addOption('local', 'Local filesystem')
+				.addOption('vault', 'Another Obsidian vault')
 				.addOption('webdav', 'WebDAV (Nextcloud, ownCloud, generic)')
 				.setValue(this.mountType)
 				.onChange(val => toggleSections(val as MountType)));
+
+		// ── Vault section (shown when type === 'vault') ────────────────────
+		vaultSection.createEl('p', {
+			text: 'Bridge to another Obsidian vault on this device. The vault\'s .obsidian configuration folder and .trash are automatically excluded. ' +
+				'Notes and attachments from the other vault appear as regular files in your current vault.',
+			cls: 'setting-item-description',
+		});
+		vaultSection.style.marginBottom = '8px';
+
+		let vaultPathText: TextComponent | null = null;
+		new Setting(vaultSection)
+			.setName('Other vault root folder')
+			.setDesc('Absolute path to the root of the other Obsidian vault')
+			.addText(text => {
+				vaultPathText = text;
+				text.inputEl.style.flex = '1';
+				text.setPlaceholder(platform === 'windows' ? 'C:\\Users\\YourName\\MyOtherVault' : '/home/yourname/MyOtherVault')
+					.setValue(this.mountType === 'vault' ? this.realPath : '')
+					.onChange(val => {
+						this.realPath = val.trim();
+						this.syncAutoLabel();
+					});
+			})
+			.addButton(btn => {
+				btn.setButtonText('Browse…')
+					.setTooltip('Open the system folder picker')
+					.onClick(async () => {
+						const selected = await browseFolderOnDisk('Select Other Vault Root');
+						if (selected) {
+							this.realPath = selected;
+							vaultPathText?.setValue(selected);
+							this.syncAutoLabel();
+						}
+					});
+			});
 
 		// ── WebDAV fields (shown when type === 'webdav') ───────────────────
 		new Setting(webdavSection)
@@ -241,9 +282,6 @@ export class MountManagerModal extends Modal {
 
 		// Apply initial visibility
 		toggleSections(this.mountType);
-
-		const platform = getPlatform();
-		const wsl = isWSL();
 
 		// Choose a platform-appropriate placeholder for the real path
 		let realPlaceholder: string;
@@ -624,6 +662,7 @@ export class MountManagerModal extends Modal {
 				enabled: this.editMount ? this.editMount.enabled : true,
 				readOnly: this.readOnly,
 				label: this.label || undefined,
+				mountType: this.mountType === 'local' ? undefined : this.mountType,
 				watcherDebounceMs: this.watcherDebounceMs,
 				watcherUsePolling: this.watcherUsePolling || undefined,
 				watcherPollingIntervalMs: this.watcherUsePolling ? this.watcherPollingIntervalMs : undefined,

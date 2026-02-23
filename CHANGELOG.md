@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-02-23
+
+### Added
+- **Vault-to-vault bridging**: Mount any folder from another Obsidian vault on this device as a virtual folder in your current vault. Notes, attachments, and folder structure are surfaced as normal files — fully readable and writable.
+- **Vault mount type**: A new "Another Obsidian vault" option in the Mount type dropdown opens a vault-specific path picker. Browse or type the root path of the other vault.
+- **Vault-aware ignore defaults**: Vault mounts automatically exclude `.obsidian`, `.trash`, and `.smart-connections` from the initial scan and file watcher, preventing cross-vault config pollution. These can be customised in Settings → Folder Bridge → mount ignore list.
+- **Local I/O path reused**: Vault mounts share the same battle-tested local filesystem code path as regular mounts — no extra overhead.
+
 ## [0.8.0] - 2026-02-23
 
 ### Added

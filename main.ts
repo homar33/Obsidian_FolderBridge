@@ -386,7 +386,11 @@ export default class FolderBridgePlugin extends Plugin {
 			...mountDataClean,
 			id: generateId(),
 			deviceId: this.settings.deviceId,
-			ignoreList: ['.git', 'node_modules', '.obsidian']
+			// Vault mounts get a broader default ignore list to avoid exposing
+			// the other vault's internal Obsidian config and trash to this vault.
+			ignoreList: mountDataClean.mountType === 'vault'
+				? ['.git', 'node_modules', '.obsidian', '.trash', '.smart-connections']
+				: ['.git', 'node_modules', '.obsidian']
 		};
 		this.settings.mountPoints.push(mount);
 
