@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Edit mount in-place**: "Edit" button on each mount row opens the Add Mount modal pre-populated with the current values. Virtual path, real path, label, and read-only flag can all be changed without removing and re-adding the mount. The vault tree and file watcher are updated live on save.
+- **Drag-drop reordering**: Mount rows in the Settings panel are now draggable. Drag any row to a new position to reorder mounts. The order is persisted immediately.
+- **"Move mount to…" context menu**: Right-clicking a mount's root folder in the file explorer shows a "Move mount to…" item. Selecting it opens the vault folder picker and relocates the mount's virtual path — live, no restart needed.
+
 ## [0.4.4] - 2026-02-23
 
 ### Documentation

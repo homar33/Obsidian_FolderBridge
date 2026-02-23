@@ -3,7 +3,7 @@ import { FolderBridgeSettings, MountPoint, DEFAULT_SETTINGS } from './src/types'
 import { PathMapper } from './src/PathMapper';
 import { VirtualAdapter } from './src/VirtualAdapter';
 import { SecurityManager } from './src/SecurityManager';
-import { MountManagerModal, getMountStatus, browseFolderOnDisk } from './src/ui/MountManagerModal';
+import { MountManagerModal, getMountStatus, browseFolderOnDisk, VaultFolderPickerModal } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
 import * as path from 'path';
@@ -80,6 +80,28 @@ export default class FolderBridgePlugin extends Plugin {
 				// Only show if the file is inside a mounted folder
 				const mount = this.pathMapper.getMountForPath(file.path);
 				if (!mount) return;
+
+				// "Move mount to…" — only on the mount's own root folder
+				const isMountRoot = file instanceof TFolder &&
+					normalizePath(file.path) === normalizePath(mount.virtualPath) &&
+					mount.deviceId === this.settings.deviceId;
+				if (isMountRoot) {
+					menu.addItem((item) => {
+						item
+							.setTitle('Move mount to\u2026')
+							.setIcon('folder-input')
+							.onClick(() => {
+								new VaultFolderPickerModal(this.app, async (newParent) => {
+									const leaf = path.posix.basename(normalizePath(mount.virtualPath));
+									const newVirtualPath = newParent
+										? normalizePath(`${newParent}/${leaf}`)
+										: leaf;
+									if (newVirtualPath === normalizePath(mount.virtualPath)) return;
+									await this.updateMount(mount.id, { ...mount, virtualPath: newVirtualPath });
+								}).open();
+							});
+					});
+				}
 
 				menu.addItem((item) => {
 					item
@@ -351,6 +373,73 @@ export default class FolderBridgePlugin extends Plugin {
 		new Notice(`FolderBridge: Removed mount "${mount.virtualPath}"`);
 	}
 
+	/**
+	 * Update an existing mount in-place.  Handles vault-tree re-injection when
+	 * the virtual path or real path changes, and keeps the allowlist in sync.
+	 */
+	async updateMount(id: string, newData: Omit<MountPoint, 'id'>): Promise<void> {
+		const idx = this.settings.mountPoints.findIndex(m => m.id === id);
+		if (idx === -1) return;
+
+		const oldMount = this.settings.mountPoints[idx];
+
+		// Validate against all OTHER mounts (exclude the one being edited)
+		const otherMounts = this.settings.mountPoints.filter(m => m.id !== id);
+		const error = this.security.validateMount(newData, otherMounts);
+		if (error) {
+			new Notice(`FolderBridge: ${error}`);
+			return;
+		}
+
+		const wasEnabled = oldMount.enabled;
+		const virtualPathChanged = normalizePath(oldMount.virtualPath) !== normalizePath(newData.virtualPath);
+		const realPathChanged = oldMount.realPath !== newData.realPath;
+
+		// Remove from vault tree before mutating PathMapper state
+		if (wasEnabled && (virtualPathChanged || realPathChanged)) {
+			await this.notifyVaultMountRemoved(oldMount);
+		}
+
+		// Keep allowlist in sync when real path changes
+		if (realPathChanged) {
+			const stillUsed = otherMounts.some(m => m.realPath === oldMount.realPath);
+			if (!stillUsed) {
+				this.settings.allowlist = this.settings.allowlist.filter(p => p !== oldMount.realPath);
+				this.security.revoke(oldMount.realPath);
+			}
+			if (!this.settings.allowlist.includes(newData.realPath)) {
+				this.settings.allowlist.push(newData.realPath);
+				this.security.allow(newData.realPath);
+			}
+		}
+
+		// Preserve id, deviceId, ignoreList, and deviceOverrides from the original
+		this.settings.mountPoints[idx] = {
+			...oldMount,
+			...newData,
+			id,
+		};
+
+		await this.saveSettings();
+		this.pathMapper.update(this.settings.mountPoints, this.settings.deviceId);
+		this.updateStatusBar();
+
+		const updatedMount = this.settings.mountPoints[idx];
+
+		// Re-inject when enabled and something structural changed
+		if (wasEnabled && (virtualPathChanged || realPathChanged)) {
+			await this.notifyVaultMountAdded(updatedMount);
+		}
+
+		// Restart watcher on the new real path if needed
+		if (realPathChanged && wasEnabled) {
+			this.fileWatcher?.stopWatching(oldMount);
+			this.fileWatcher?.startWatching(updatedMount);
+		}
+
+		new Notice(`FolderBridge: Updated "${updatedMount.virtualPath}"`);
+	}
+
 	// ------------------------------------------------------------------
 	// Vault file-tree injection
 	// ------------------------------------------------------------------
@@ -589,6 +678,8 @@ export default class FolderBridgePlugin extends Plugin {
 class FolderBridgeSettingTab extends PluginSettingTab {
 	plugin: FolderBridgePlugin;
 	private selectedIgnoreMountId: string | null = null;
+	/** ID of the mount row being dragged (for reorder drag-drop). */
+	private dragSrcId: string | null = null;
 
 	constructor(app: App, plugin: FolderBridgePlugin) {
 		super(app, plugin);
@@ -821,8 +912,10 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 			});
 		}
 
+		// Wrap mount rows in a container so drag-drop only affects this list
+		const mountListEl = containerEl.createDiv('folderbridge-mount-list');
 		for (const mount of this.plugin.settings.mountPoints) {
-			this.renderMountRow(containerEl, mount);
+			this.renderMountRow(mountListEl, mount);
 		}
 	}
 
@@ -913,6 +1006,55 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				}));
 		}
 
+		// Edit button — opens the modal pre-populated with this mount's values
+		if (isThisDevice) {
+			setting.addButton(btn => btn
+				.setButtonText('Edit')
+				.setTooltip("Edit this mount's paths, label, or read-only flag")
+				.onClick(() => {
+					new MountManagerModal(
+						this.app,
+						this.plugin.security,
+						async (updatedData, editId) => {
+							if (editId) {
+								await this.plugin.updateMount(editId, updatedData);
+							}
+							this.display();
+						},
+						mount, // pre-populate all fields
+					).open();
+				}));
+		}
+
+		if (!isThisDevice) {
+			setting.addButton(btn => btn
+				.setButtonText('Override Path')
+				.setTooltip('Set a different real path for this device')
+				.onClick(async () => {
+					const newPath = await browseFolderOnDisk('Select Real Folder for this Device');
+					if (newPath) {
+						if (!mount.deviceOverrides) mount.deviceOverrides = {};
+						mount.deviceOverrides[this.plugin.settings.deviceId] = newPath;
+
+						// Add to allowlist
+						if (!this.plugin.settings.allowlist.includes(newPath)) {
+							this.plugin.settings.allowlist.push(newPath);
+							this.plugin.security.allow(newPath);
+						}
+
+						await this.plugin.saveSettings();
+						this.plugin.pathMapper.update(this.plugin.settings.mountPoints, this.plugin.settings.deviceId);
+						// Restart the file watcher so it tracks the new real path
+						if (mount.enabled) {
+							this.plugin.fileWatcher?.stopWatching(mount);
+							this.plugin.fileWatcher?.startWatching(mount);
+						}
+						this.display();
+						new Notice(`FolderBridge: Path overridden for this device.`);
+					}
+				}));
+		}
+
 		setting.addButton(btn => btn
 			.setButtonText('Remove')
 			.setWarning()
@@ -921,7 +1063,58 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				this.display();
 			}));
 
-		// Async status badge
+		// ── Drag-drop reordering ────────────────────────────────────────────
+		const el = setting.settingEl;
+		el.setAttribute('draggable', 'true');
+		el.dataset.mountId = mount.id;
+		el.addClass('folderbridge-draggable-row');
+
+		el.addEventListener('dragstart', (e) => {
+			this.dragSrcId = mount.id;
+			el.addClass('folderbridge-drag-source');
+			e.dataTransfer?.setData('text/plain', mount.id);
+		});
+
+		el.addEventListener('dragend', () => {
+			this.dragSrcId = null;
+			el.removeClass('folderbridge-drag-source');
+			containerEl.querySelectorAll('.folderbridge-drag-over')
+				.forEach(n => (n as HTMLElement).removeClass('folderbridge-drag-over'));
+		});
+
+		el.addEventListener('dragover', (e) => {
+			if (this.dragSrcId && this.dragSrcId !== mount.id) {
+				e.preventDefault();
+				containerEl.querySelectorAll('.folderbridge-drag-over')
+					.forEach(n => (n as HTMLElement).removeClass('folderbridge-drag-over'));
+				el.addClass('folderbridge-drag-over');
+			}
+		});
+
+		el.addEventListener('dragleave', (e) => {
+			if (!el.contains(e.relatedTarget as Node)) {
+				el.removeClass('folderbridge-drag-over');
+			}
+		});
+
+		el.addEventListener('drop', async (e) => {
+			e.preventDefault();
+			el.removeClass('folderbridge-drag-over');
+			if (!this.dragSrcId || this.dragSrcId === mount.id) return;
+
+			const mounts = this.plugin.settings.mountPoints;
+			const srcIdx = mounts.findIndex(m => m.id === this.dragSrcId);
+			const dstIdx = mounts.findIndex(m => m.id === mount.id);
+			if (srcIdx === -1 || dstIdx === -1) return;
+
+			const [moved] = mounts.splice(srcIdx, 1);
+			mounts.splice(dstIdx, 0, moved);
+
+			await this.plugin.saveSettings();
+			this.display();
+		});
+
+		// ── Async status badge ───────────────────────────────────────────────
 		if (canEnable) {
 			getMountStatus(mount).then(status => {
 				const badge = status.reachable

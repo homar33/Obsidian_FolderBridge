@@ -2,7 +2,7 @@
 
 This document tracks the current status of platform support and planned features. It is updated with each release.
 
-**Current version: v0.4.4** — Last updated: 2026-02-23
+**Current version: v0.5.0 (unreleased)** — Last updated: 2026-02-23
 
 ---
 
@@ -24,11 +24,10 @@ This document tracks the current status of platform support and planned features
 
 ### High Priority
 
-- **Virtual Path Management & Drag-Drop Reorganization**
-  - Edit or change the virtual path of an existing mount without deleting and recreating it
-  - Drag-drop reordering of mounts in the settings UI
-  - Drag-drop moving of mounts within the vault file explorer (e.g. `Projects/Work` → `Archive/Work`)
-  - Goal: UX parity with Obsidian's native folder management
+- ~~**Virtual Path Management & Drag-Drop Reorganization**~~ ✅ **Done (unreleased)**
+  - ~~Edit or change the virtual path of an existing mount without deleting and recreating it~~ → **Edit button** pre-populates the full modal; vault tree + watcher update live
+  - ~~Drag-drop reordering of mounts in the settings UI~~ → **HTML5 drag-drop** on mount rows; persisted immediately
+  - ~~Drag-drop moving of mounts within the vault file explorer~~ → **"Move mount to…" context menu** on mount root folders; uses the vault folder picker
 
 ### Medium Priority
 
@@ -58,6 +57,7 @@ This document tracks the current status of platform support and planned features
 
 | Version | What shipped |
 |---------|-------------|
+| v0.5.0 | Edit mount in-place (Edit button); drag-drop reorder in settings; "Move mount to…" context-menu on mount root folders |
 | v0.4.4 | Platform support documentation; macOS marked untested (not unimplemented); mobile sandbox clarification |
 | v0.4.3 | Image/PDF rendering via `data:` URIs; rename race fix (2s poll); 300ms debounce for rapid saves; OneDrive cloud placeholder detection; PathMapper O(N) lookup cache |
 | v0.4.2 | FileWatcher hardening (symlink escape fix, event string, watcher restart, 20 unit tests); 0 npm audit vulnerabilities |

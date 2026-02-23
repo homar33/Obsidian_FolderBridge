@@ -54,7 +54,7 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
  * vault.  Used so the user can browse the vault hierarchy when choosing a
  * virtual parent path, rather than having to type it from memory.
  */
-class VaultFolderPickerModal extends SuggestModal<string> {
+export class VaultFolderPickerModal extends SuggestModal<string> {
 	private onChoose: (folderPath: string) => void;
 	private folders: string[];
 
@@ -106,7 +106,7 @@ class VaultFolderPickerModal extends SuggestModal<string> {
 // ---------------------------------------------------------------------------
 
 /** Callback invoked by the modal when the user successfully validates a mount. */
-export type OnMountSave = (mount: Omit<MountPoint, 'id'>) => Promise<void>;
+export type OnMountSave = (mount: Omit<MountPoint, 'id'>, editId?: string) => Promise<void>;
 
 // ---------------------------------------------------------------------------
 // MountManagerModal
@@ -126,6 +126,7 @@ export type OnMountSave = (mount: Omit<MountPoint, 'id'>) => Promise<void>;
 export class MountManagerModal extends Modal {
 	private onSave: OnMountSave;
 	private security: SecurityManager;
+	private editMount: MountPoint | undefined;
 
 	// ── Form state ──────────────────────────────────────────────────────────
 	private virtualPath = '';
@@ -139,16 +140,24 @@ export class MountManagerModal extends Modal {
 	private realPathText: TextComponent | null = null;
 	private labelText: TextComponent | null = null;
 
-	constructor(app: App, security: SecurityManager, onSave: OnMountSave) {
+	constructor(app: App, security: SecurityManager, onSave: OnMountSave, editMount?: MountPoint) {
 		super(app);
 		this.security = security;
 		this.onSave = onSave;
+		this.editMount = editMount;
+		// Pre-populate state from existing mount
+		if (editMount) {
+			this.virtualPath = editMount.virtualPath;
+			this.realPath = editMount.realPath;
+			this.readOnly = editMount.readOnly;
+			this.label = editMount.label ?? '';
+		}
 	}
 
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.createEl('h2', { text: 'Add Mount Point' });
+		contentEl.createEl('h2', { text: this.editMount ? 'Edit Mount Point' : 'Add Mount Point' });
 
 		const platform = getPlatform();
 		const wsl = isWSL();
@@ -171,6 +180,7 @@ export class MountManagerModal extends Modal {
 				this.realPathText = text;
 				text.inputEl.style.flex = '1';
 				text.setPlaceholder(realPlaceholder)
+					.setValue(this.realPath)
 					.onChange(val => {
 						this.realPath = val.trim();
 						this.syncAutoLabel();
@@ -237,6 +247,7 @@ export class MountManagerModal extends Modal {
 				this.virtualPathText = text;
 				text.inputEl.style.flex = '1';
 				text.setPlaceholder('Projects/Work')
+					.setValue(this.virtualPath)
 					.onChange(val => { this.virtualPath = val.trim(); });
 			})
 			.addButton(btn => {
@@ -290,6 +301,7 @@ export class MountManagerModal extends Modal {
 			.addText(text => {
 				this.labelText = text;
 				text.setPlaceholder('My Work Documents')
+					.setValue(this.label)
 					.onChange(val => { this.label = val.trim(); });
 			});
 
@@ -298,13 +310,13 @@ export class MountManagerModal extends Modal {
 			.setName('Read-only')
 			.setDesc('When enabled, FolderBridge will refuse any write operations to this mount')
 			.addToggle(toggle => toggle
-				.setValue(false)
+				.setValue(this.readOnly)
 				.onChange(val => { this.readOnly = val; }));
 
 		// ── Action buttons ─────────────────────────────────────────────────
 		new Setting(contentEl)
 			.addButton(btn => btn
-				.setButtonText('Validate & Add')
+				.setButtonText(this.editMount ? 'Save Changes' : 'Validate & Add')
 				.setCta()
 				.onClick(() => { this.handleSave().catch(console.error); }))
 			.addButton(btn => btn
@@ -360,23 +372,27 @@ export class MountManagerModal extends Modal {
 				readOnly: this.readOnly,
 				label: this.label || undefined,
 			},
-			[], // Full existing-mount check is done again by the plugin's addMount()
+			[], // Full existing-mount check is done again by the plugin's addMount() / updateMount()
 		);
 		if (validationError) {
 			new Notice(`FolderBridge: ${validationError}`);
 			return;
 		}
 
-		const dirExists = await isDirectory(this.realPath);
-		if (!dirExists) {
-			new Notice(`FolderBridge: "${this.realPath}" is not an accessible directory.`);
-			return;
-		}
+		// Only re-check accessibility when the real path has changed (or this is a new mount)
+		const realPathChanged = !this.editMount || this.editMount.realPath !== this.realPath;
+		if (realPathChanged) {
+			const dirExists = await isDirectory(this.realPath);
+			if (!dirExists) {
+				new Notice(`FolderBridge: "${this.realPath}" is not an accessible directory.`);
+				return;
+			}
 
-		const { accessible, error } = await checkPathAccessible(this.realPath);
-		if (!accessible) {
-			new Notice(`FolderBridge: Cannot access "${this.realPath}": ${error}`);
-			return;
+			const { accessible, error } = await checkPathAccessible(this.realPath);
+			if (!accessible) {
+				new Notice(`FolderBridge: Cannot access "${this.realPath}": ${error}`);
+				return;
+			}
 		}
 
 		// Non-blocking advisory warnings (e.g. UNC / network paths)
@@ -385,13 +401,16 @@ export class MountManagerModal extends Modal {
 			new Notice(`FolderBridge warning: ${w}`, 10_000);
 		}
 
-		await this.onSave({
-			virtualPath: normalizedVirtual,
-			realPath: this.realPath,
-			enabled: true,
-			readOnly: this.readOnly,
-			label: this.label || undefined,
-		});
+		await this.onSave(
+			{
+				virtualPath: normalizedVirtual,
+				realPath: this.realPath,
+				enabled: this.editMount ? this.editMount.enabled : true,
+				readOnly: this.readOnly,
+				label: this.label || undefined,
+			},
+			this.editMount?.id,
+		);
 
 		this.close();
 	}

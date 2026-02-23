@@ -41,3 +41,30 @@
     color: var(--text-accent);
     font-weight: 500;
 }
+
+/* ── Mount list drag-drop reordering ─────────────────────────────────────── */
+
+/* Show a grab cursor on the info half of a draggable row */
+.folderbridge-draggable-row {
+    cursor: grab;
+    transition: opacity 0.15s ease;
+}
+
+/* Controls inside the row keep their default cursor */
+.folderbridge-draggable-row button,
+.folderbridge-draggable-row input,
+.folderbridge-draggable-row .checkbox-container {
+    cursor: pointer;
+}
+
+/* The row being dragged goes semi-transparent */
+.folderbridge-drag-source {
+    opacity: 0.4;
+    cursor: grabbing;
+}
+
+/* Drop target: highlight top border to show insertion point */
+.folderbridge-drag-over {
+    border-top: 2px solid var(--interactive-accent) !important;
+    background-color: var(--background-modifier-hover);
+}
