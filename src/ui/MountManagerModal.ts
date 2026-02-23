@@ -24,7 +24,7 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
-			new Notice('FolderBridge: Native folder browser is unavailable. Please type the path manually.');
+			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,8 +39,8 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 		if (result.canceled || !result.filePaths?.length) return null;
 		return result.filePaths[0] as string;
 	} catch (err) {
-		console.error('FolderBridge: Electron dialog error', err);
-		new Notice('FolderBridge: Native folder browser is unavailable. Please type the path manually.');
+		console.error('Folder Bridge: Electron dialog error', err);
+		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
 }
@@ -317,7 +317,7 @@ export class MountManagerModal extends Modal {
 		// ── Read-only ──────────────────────────────────────────────────────
 		new Setting(contentEl)
 			.setName('Read-only')
-			.setDesc('When enabled, FolderBridge will refuse any write operations to this mount')
+			.setDesc('When enabled, Folder Bridge will refuse any write operations to this mount')
 			.addToggle(toggle => toggle
 				.setValue(this.readOnly)
 				.onChange(val => { this.readOnly = val; }));
@@ -438,15 +438,15 @@ export class MountManagerModal extends Modal {
 			|| (this.realPath ? path.basename(this.realPath) : '');
 
 		if (!virtualPathToUse) {
-			new Notice('FolderBridge: Virtual path is required.');
+			new Notice('Folder Bridge: Virtual path is required.');
 			return;
 		}
 		if (!this.realPath) {
-			new Notice('FolderBridge: Real path is required.');
+			new Notice('Folder Bridge: Real path is required.');
 			return;
 		}
 		if (!path.isAbsolute(this.realPath)) {
-			new Notice('FolderBridge: Real path must be an absolute filesystem path.');
+			new Notice('Folder Bridge: Real path must be an absolute filesystem path.');
 			return;
 		}
 
@@ -464,7 +464,7 @@ export class MountManagerModal extends Modal {
 			[], // Full existing-mount check is done again by the plugin's addMount() / updateMount()
 		);
 		if (validationError) {
-			new Notice(`FolderBridge: ${validationError}`);
+			new Notice(`Folder Bridge: ${validationError}`);
 			return;
 		}
 
@@ -473,13 +473,13 @@ export class MountManagerModal extends Modal {
 		if (realPathChanged) {
 			const dirExists = await isDirectory(this.realPath);
 			if (!dirExists) {
-				new Notice(`FolderBridge: "${this.realPath}" is not an accessible directory.`);
+				new Notice(`Folder Bridge: "${this.realPath}" is not an accessible directory.`);
 				return;
 			}
 
 			const { accessible, error } = await checkPathAccessible(this.realPath);
 			if (!accessible) {
-				new Notice(`FolderBridge: Cannot access "${this.realPath}": ${error}`);
+				new Notice(`Folder Bridge: Cannot access "${this.realPath}": ${error}`);
 				return;
 			}
 		}
@@ -487,7 +487,7 @@ export class MountManagerModal extends Modal {
 		// Non-blocking advisory warnings (e.g. UNC / network paths)
 		const warnings = this.security.getPathWarnings(this.realPath);
 		for (const w of warnings) {
-			new Notice(`FolderBridge warning: ${w}`, 10_000);
+			new Notice(`Folder Bridge warning: ${w}`, 10_000);
 		}
 
 		await this.onSave(

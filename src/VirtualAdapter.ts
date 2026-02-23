@@ -81,7 +81,7 @@ export class VirtualAdapter {
 	private assertAllowed(realPath: string): void {
 		if (!this.security.isAllowed(realPath)) {
 			throw new Error(
-				`FolderBridge: "${realPath}" is not on the allowlist. ` +
+				`Folder Bridge: "${realPath}" is not on the allowlist. ` +
 				`Add the mount in plugin settings to permit access.`
 			);
 		}
@@ -97,7 +97,7 @@ export class VirtualAdapter {
 		const base = path.basename(realPath);
 		if (isReservedWindowsFilename(base)) {
 			throw new Error(
-				`FolderBridge: "${base}" is a reserved device name on Windows and ` +
+				`Folder Bridge: "${base}" is a reserved device name on Windows and ` +
 				`cannot be used as a file or folder name (e.g. CON, NUL, COM1-9, LPT1-9).`
 			);
 		}
@@ -253,7 +253,7 @@ export class VirtualAdapter {
 		} catch (e) {
 			const msg = translateFsError(e as NodeJS.ErrnoException, 'list');
 			console.error(`[FolderBridge] Failed to list directory "${realDirPath}":`, msg);
-			throw new Error(`FolderBridge: Cannot list "${realDirPath}": ${msg}`);
+			throw new Error(`Folder Bridge: Cannot list "${realDirPath}": ${msg}`);
 		}
 
 		console.debug(`[FolderBridge] listRealDirectory: found ${entries.length} entries in "${realDirPath}"`);
@@ -313,7 +313,7 @@ export class VirtualAdapter {
 	async read(normalizedPath: string): Promise<string> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot read ignored path "${normalizedPath}"`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot read ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			try {
@@ -325,7 +325,7 @@ export class VirtualAdapter {
 					// (e.g. OneDrive Files On Demand) before surfacing a raw ENOENT.
 					if (await isCloudPlaceholder(realPath)) {
 						throw new Error(
-							`FolderBridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
+							`Folder Bridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
 							`(OneDrive / SharePoint Files On Demand) and cannot be read while offline. ` +
 							`Right-click the file and choose "Always keep on this device" to make it available locally.`
 						);
@@ -335,7 +335,7 @@ export class VirtualAdapter {
 					(err as any).code = 'ENOENT';
 					throw err;
 				}
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'read')}`);
+				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'read')}`);
 			}
 		}
 		return this.orig().read(normalizedPath);
@@ -344,7 +344,7 @@ export class VirtualAdapter {
 	async readBinary(normalizedPath: string): Promise<ArrayBuffer> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot read ignored path "${normalizedPath}"`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot read ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			try {
@@ -355,7 +355,7 @@ export class VirtualAdapter {
 				if (e.code === 'ENOENT') {
 					if (await isCloudPlaceholder(realPath)) {
 						throw new Error(
-							`FolderBridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
+							`Folder Bridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
 							`(OneDrive / SharePoint Files On Demand) and cannot be read while offline. ` +
 							`Right-click the file and choose "Always keep on this device" to make it available locally.`
 						);
@@ -364,7 +364,7 @@ export class VirtualAdapter {
 					(err as any).code = 'ENOENT';
 					throw err;
 				}
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'readBinary')}`);
+				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'readBinary')}`);
 			}
 		}
 		return this.orig().readBinary(normalizedPath);
@@ -377,8 +377,8 @@ export class VirtualAdapter {
 	async write(normalizedPath: string, data: string, options?: unknown): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot write to ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
 
 			const realPath = this.toReal(normalizedPath, mount);
 
@@ -390,7 +390,7 @@ export class VirtualAdapter {
 				await fs.promises.writeFile(realPath, data, 'utf8');
 				return;
 			} catch (e) {
-				const errorMsg = `FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
+				const errorMsg = `Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
 				console.error(`[FolderBridge] write failed for "${realPath}":`, e, errorMsg);
 				throw new Error(errorMsg);
 			}
@@ -401,8 +401,8 @@ export class VirtualAdapter {
 	async writeBinary(normalizedPath: string, data: ArrayBuffer, options?: unknown): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot write to ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
@@ -411,7 +411,7 @@ export class VirtualAdapter {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
 				return await fs.promises.writeFile(realPath, Buffer.from(data));
 			} catch (e) {
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'writeBinary')}`);
+				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'writeBinary')}`);
 			}
 		}
 		return this.orig().writeBinary(normalizedPath, data, options);
@@ -420,15 +420,15 @@ export class VirtualAdapter {
 	async append(normalizedPath: string, data: string, options?: unknown): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot append to ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot append to ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] append → ${realPath}`); return; }
 			try {
 				return await fs.promises.appendFile(realPath, data, 'utf8');
 			} catch (e) {
-				throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'append')}`);
+				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'append')}`);
 			}
 		}
 		return this.orig().append(normalizedPath, data, options);
@@ -441,7 +441,7 @@ export class VirtualAdapter {
 	): Promise<string> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot process ignored path "${normalizedPath}"`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot process ignored path "${normalizedPath}"`);
 			const content = await this.read(normalizedPath);
 			const updated = fn(content);
 			await this.write(normalizedPath, updated, options);
@@ -474,8 +474,8 @@ export class VirtualAdapter {
 	async mkdir(normalizedPath: string): Promise<void> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot create ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot create ignored path "${normalizedPath}"`);
 
 			const realPath = this.toReal(normalizedPath, mount);
 
@@ -490,7 +490,7 @@ export class VirtualAdapter {
 			try {
 				await fs.promises.mkdir(realPath, { recursive: true });
 			} catch (e) {
-				const errorMsg = `FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'mkdir')}`;
+				const errorMsg = `Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'mkdir')}`;
 				console.error(`[FolderBridge] mkdir failed for "${realPath}":`, e, errorMsg);
 				throw new Error(errorMsg);
 			}
@@ -507,7 +507,7 @@ export class VirtualAdapter {
 	private async handleRootMountDeletion(rootMount: MountPoint): Promise<boolean> {
 		const action = await this.onMountRootDelete(rootMount);
 		if (action === 'cancel') {
-			throw new Error(`FolderBridge: Deletion cancelled.`);
+			throw new Error(`Folder Bridge: Deletion cancelled.`);
 		}
 		if (action === 'unmount') {
 			// The callback handles the unmounting. We just return true to stop the real deletion.
@@ -526,8 +526,8 @@ export class VirtualAdapter {
 
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot trash ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot trash ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] trashSystem → ${realPath}`); return true; }
@@ -554,8 +554,8 @@ export class VirtualAdapter {
 
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot trash ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot trash ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] trashLocal → ${realPath}`); return; }
@@ -574,8 +574,8 @@ export class VirtualAdapter {
 
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot remove ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot remove ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] rmdir → ${realPath}`); return; }
@@ -596,8 +596,8 @@ export class VirtualAdapter {
 
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (mount.readOnly) throw new Error(`FolderBridge: Mount "${mount.virtualPath}" is read-only.`);
-			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`FolderBridge: Cannot remove ignored path "${normalizedPath}"`);
+			if (mount.readOnly) throw new Error(`Folder Bridge: Mount "${mount.virtualPath}" is read-only.`);
+			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot remove ignored path "${normalizedPath}"`);
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] remove → ${realPath}`); return; }
@@ -632,9 +632,9 @@ export class VirtualAdapter {
 
 		if (srcMount && dstMount && srcMount.id === dstMount.id) {
 			// Rename within the same mount
-			if (srcMount.readOnly) throw new Error(`FolderBridge: Mount "${srcMount.virtualPath}" is read-only.`);
+			if (srcMount.readOnly) throw new Error(`Folder Bridge: Mount "${srcMount.virtualPath}" is read-only.`);
 			if (this.isPathIgnored(normalizedPath, srcMount) || this.isPathIgnored(newNormalizedPath, dstMount)) {
-				throw new Error(`FolderBridge: Cannot rename ignored paths`);
+				throw new Error(`Folder Bridge: Cannot rename ignored paths`);
 			}
 			const srcReal = this.toReal(normalizedPath, srcMount);
 			const dstReal = this.toReal(newNormalizedPath, dstMount);
@@ -675,7 +675,7 @@ export class VirtualAdapter {
 					return; // destination already exists – rename is effectively done
 				} catch { /* neither end exists; fall through to throw */ }
 				throw new Error(
-					`FolderBridge: Cannot rename "${path.basename(srcReal)}" – the source file was not found after ` +
+					`Folder Bridge: Cannot rename "${path.basename(srcReal)}" – the source file was not found after ` +
 					`waiting ${MAX_WAIT_MS}ms. ` +
 					`If this file is in OneDrive "Files On Demand", right-click it in Windows Explorer and ` +
 					`choose "Always keep on this device", then try again.`,
@@ -694,14 +694,14 @@ export class VirtualAdapter {
 					await fs.promises.rm(srcReal, { recursive: true });
 					return;
 				}
-				throw new Error(`FolderBridge: ${translateFsError(err, 'rename')}`);
+				throw new Error(`Folder Bridge: ${translateFsError(err, 'rename')}`);
 			}
 			return;
 		}
 
 		// Cross-mount or cross-adapter rename is not atomic – surface a clear error
 		throw new Error(
-			`FolderBridge: Cannot move "${normalizedPath}" to "${newNormalizedPath}" across mount boundaries. ` +
+			`Folder Bridge: Cannot move "${normalizedPath}" to "${newNormalizedPath}" across mount boundaries. ` +
 			`Please copy the file manually instead.`
 		);
 	}
@@ -715,11 +715,11 @@ export class VirtualAdapter {
 		}
 
 		if (dstMount?.readOnly) {
-			throw new Error(`FolderBridge: Mount "${dstMount.virtualPath}" is read-only.`);
+			throw new Error(`Folder Bridge: Mount "${dstMount.virtualPath}" is read-only.`);
 		}
 
 		if ((srcMount && this.isPathIgnored(normalizedPath, srcMount)) || (dstMount && this.isPathIgnored(newNormalizedPath, dstMount))) {
-			throw new Error(`FolderBridge: Cannot copy ignored paths`);
+			throw new Error(`Folder Bridge: Cannot copy ignored paths`);
 		}
 
 		if (this.dryRun) {
@@ -748,8 +748,8 @@ export class VirtualAdapter {
 		} catch (e) {
 			// Re-throw FolderBridge errors unchanged; translate raw fs errors
 			const err = e as Error;
-			if (err.message.startsWith('FolderBridge:')) throw err;
-			throw new Error(`FolderBridge: ${translateFsError(e as NodeJS.ErrnoException, 'copy')}`);
+			if (err.message.startsWith('Folder Bridge:')) throw err;
+			throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'copy')}`);
 		}
 	}
 }

@@ -110,7 +110,7 @@ and written directly from their original location; nothing is copied or moved.
 
 ## Sync Compatibility (Obsidian Sync / Syncthing)
 
-FolderBridge is designed to work safely with sync engines. When you create a mount, it is tagged with a unique `deviceId` for your current Obsidian instance. This prevents other devices from attempting to mount paths that don't exist locally.
+Folder Bridge is designed to work safely with sync engines. When you create a mount, it is tagged with a unique `deviceId` for your current Obsidian instance. This prevents other devices from attempting to mount paths that don't exist locally.
 
 If you sync your vault to another device:
 - **Identical Paths**: If the external folder exists at the exact same path on both devices, you can enable **Allow foreign mounts** in the settings to automatically activate it.
