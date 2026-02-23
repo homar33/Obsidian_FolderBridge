@@ -619,6 +619,45 @@ export class VirtualAdapter {
 			this.assertNotReserved(dstReal);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] rename ${srcReal} → ${dstReal}`); return; }
 			await fs.promises.mkdir(path.dirname(dstReal), { recursive: true });
+
+			// Wait for srcReal to materialise before attempting the rename.
+			// Obsidian's vault.create() may register a TFile in its in-memory
+			// index and focus the inline-title editor *before* adapter.write()
+			// has finished writing the file to disk.  If the user immediately
+			// types a title and blurs, adapter.rename() is called while the
+			// source path hasn't been written yet.  OneDrive cloud-sync operations
+			// can also cause a transient ENOENT on a freshly-written file.
+			const MAX_WAIT_MS = 2000;
+			const POLL_MS = 100;
+			let waited = 0;
+			let srcExists = false;
+			while (waited <= MAX_WAIT_MS) {
+				try {
+					await fs.promises.access(srcReal, fs.constants.F_OK);
+					srcExists = true;
+					break;
+				} catch {
+					if (waited >= MAX_WAIT_MS) break;
+					await new Promise<void>(resolve => setTimeout(resolve, POLL_MS));
+					waited += POLL_MS;
+				}
+			}
+
+			if (!srcExists) {
+				// Check for an idempotent rename: an external tool or a parallel
+				// vault.create() path may have already moved the file.
+				try {
+					await fs.promises.access(dstReal, fs.constants.F_OK);
+					return; // destination already exists – rename is effectively done
+				} catch { /* neither end exists; fall through to throw */ }
+				throw new Error(
+					`FolderBridge: Cannot rename "${path.basename(srcReal)}" – the source file was not found after ` +
+					`waiting ${MAX_WAIT_MS}ms. ` +
+					`If this file is in OneDrive "Files On Demand", right-click it in Windows Explorer and ` +
+					`choose "Always keep on this device", then try again.`,
+				);
+			}
+
 			try {
 				await fs.promises.rename(srcReal, dstReal);
 			} catch (e) {
