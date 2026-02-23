@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-02-23
+
+### Documentation
+- **Platform support table** — Added explicit Windows / macOS / Linux / mobile status to the README Features section so platform expectations are clear upfront.
+- **macOS** — Marked as untested (POSIX code paths implemented; community reports welcome). Added iCloud optimized-storage workaround note.
+- **Mobile** — Clearly documented that iOS and Android are unsupported due to the OS sandbox; this is a hard platform restriction, not a missing feature.
+- **Platform Notes section** — Renamed "Windows Notes" to "Platform Notes" and added dedicated macOS and Mobile subsections.
+
 ## [0.4.3] - 2026-02-22
 
 ### Fixed
