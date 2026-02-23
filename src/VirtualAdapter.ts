@@ -532,7 +532,7 @@ export class VirtualAdapter {
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.log(`[FolderBridge DryRun] trashSystem → ${realPath}`); return true; }
 			try {
-				// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-explicit-any
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const { shell } = require('electron') as any;
 				await shell.trashItem(realPath);
 				return true;
