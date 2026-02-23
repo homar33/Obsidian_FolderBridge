@@ -10,12 +10,16 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Multi-Root Workspaces** — Work with files from multiple locations simultaneously
 - **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
 - **Zero Duplication** — Files are read and written directly from their real locations
+- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Credentials are stored in session memory only, never synced.
+- **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian to improve performance and reduce clutter.
 - **Read-Only Mounts** — Protect external folders from accidental writes
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
 - **Dry-Run Mode** — Log all write operations to the console without executing them (safe for testing)
+- **Conflict Resolution UI** — Background reachability checks every 30 s; orange status bar and per-mount reconnect button when a mount goes offline
+- **Per-Mount Performance Tuning** — Configure debounce threshold, polling mode, polling interval, and max-files scan limit per mount
 
 ### Platform Support
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-02-23
+
+### Changed
+- **Stable release**: All roadmap items through v0.9.0 are complete. Folder Bridge is feature-complete for v1.0.
+- Updated README to list all features added since v0.5.0 (WebDAV, vault-to-vault bridging, conflict resolution, per-mount performance tuning).
+- Updated `docs/roadmap.md`: all planned features marked complete; Recently Completed table extended through v1.0.0.
+
 ## [0.9.0] - 2026-02-23
 
 ### Added
