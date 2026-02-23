@@ -64,6 +64,22 @@ export async function isSymlink(realPath: string): Promise<boolean> {
 	}
 }
 
+/**
+ * Returns true when a real path appears to exist on disk (F_OK passes) but
+ * threw ENOENT when opened for reading — the fingerprint of an OneDrive /
+ * SharePoint "Files On Demand" online-only placeholder on Windows.
+ *
+ * Intentionally async so it never blocks the event loop.
+ */
+export async function isCloudPlaceholder(realPath: string): Promise<boolean> {
+	try {
+		await fs.promises.access(realPath, fs.constants.F_OK);
+		return true; // path exists on disk but readFile threw ENOENT → placeholder
+	} catch {
+		return false; // genuinely missing
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Windows-specific helpers
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@
   "servers": {
     "code-scalpel": {
       "command": "uvx",
-      "args": ["codescalpel", "mcp"],
+      "args": ["codescalpel@latest", "mcp"],
       "env": {
         "CODE_SCALPEL_LICENSE_PATH": "${workspaceFolder}/.code-scalpel/license/"
       }

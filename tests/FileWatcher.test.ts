@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { App } from 'obsidian';
 import { FileWatcher } from '../src/FileWatcher';
 import { PathMapper } from '../src/PathMapper';
@@ -221,26 +221,90 @@ describe('FileWatcher', () => {
         });
 
         it('file-changed: calls vault.onChange with stat then raw', async () => {
+            vi.useFakeTimers();
             const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
             mockGetAbstractFileByPath.mockReturnValue({ path: 'mounts/docs/note.md' });
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            await getCallback('change')('C:/Users/test/Documents/note.md');
+            // handleEvent is synchronous — must advance timers to trigger dispatchEvent
+            (getCallback('change') as (p: string) => void)('C:/Users/test/Documents/note.md');
+            await vi.runAllTimersAsync();
 
             expect(mockOnChange).toHaveBeenCalledWith('file-changed', 'mounts/docs/note.md', null, expect.any(Object));
             expect(mockOnChange).toHaveBeenCalledWith('raw', 'mounts/docs/note.md', null, null);
+            vi.useRealTimers();
         });
 
         it('file-changed: skips when file is not in vault', async () => {
+            vi.useFakeTimers();
             const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
             mockGetAbstractFileByPath.mockReturnValue(null);
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            await getCallback('change')('C:/Users/test/Documents/note.md');
+            (getCallback('change') as (p: string) => void)('C:/Users/test/Documents/note.md');
+            await vi.runAllTimersAsync();
 
             expect(mockOnChange).not.toHaveBeenCalled();
+            vi.useRealTimers();
+        });
+
+        it('file-changed: debounces rapid writes — only notifies vault once', async () => {
+            vi.useFakeTimers();
+            const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
+            mockGetAbstractFileByPath.mockReturnValue({ path: 'mounts/docs/note.md' });
+            const fw = new FileWatcher(app, makeMapper(mount), () => false);
+            fw.startWatching(mount);
+
+            const changeCb = getCallback('change') as (p: string) => void;
+            changeCb('C:/Users/test/Documents/note.md');
+            changeCb('C:/Users/test/Documents/note.md');
+            changeCb('C:/Users/test/Documents/note.md');
+            await vi.runAllTimersAsync();
+
+            // Three rapid writes → one file-changed + one raw
+            expect(mockOnChange).toHaveBeenCalledTimes(2);
+            expect(mockOnChange).toHaveBeenCalledWith('file-changed', 'mounts/docs/note.md', null, expect.any(Object));
+            vi.useRealTimers();
+        });
+
+        it('file-changed: resets timer on each write (trailing-edge debounce)', async () => {
+            vi.useFakeTimers();
+            const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
+            mockGetAbstractFileByPath.mockReturnValue({ path: 'mounts/docs/note.md' });
+            const fw = new FileWatcher(app, makeMapper(mount), () => false);
+            fw.startWatching(mount);
+
+            const changeCb = getCallback('change') as (p: string) => void;
+            changeCb('C:/Users/test/Documents/note.md');
+            await vi.advanceTimersByTimeAsync(100); // before DEBOUNCE_MS
+            expect(mockOnChange).not.toHaveBeenCalled();
+
+            changeCb('C:/Users/test/Documents/note.md'); // resets the 300ms timer
+            await vi.advanceTimersByTimeAsync(299);
+            expect(mockOnChange).not.toHaveBeenCalled(); // still inside new window
+
+            await vi.runAllTimersAsync(); // now past DEBOUNCE_MS
+            expect(mockOnChange).toHaveBeenCalledWith('file-changed', 'mounts/docs/note.md', null, expect.any(Object));
+            vi.useRealTimers();
+        });
+
+        it('file-changed: separate paths debounce independently', async () => {
+            vi.useFakeTimers();
+            const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
+            mockGetAbstractFileByPath.mockReturnValue({ path: 'mounts/docs/a.md' });
+            const fw = new FileWatcher(app, makeMapper(mount), () => false);
+            fw.startWatching(mount);
+
+            const changeCb = getCallback('change') as (p: string) => void;
+            changeCb('C:/Users/test/Documents/a.md');
+            changeCb('C:/Users/test/Documents/b.md');
+            await vi.runAllTimersAsync();
+
+            // Two different paths → two independent debounce timers → 4 onChange calls
+            expect(mockOnChange).toHaveBeenCalledTimes(4); // (file-changed + raw) × 2
+            vi.useRealTimers();
         });
 
         it('file-removed: calls vault.onChange without stat', async () => {
@@ -310,6 +374,9 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            await expect(getCallback('add')('C:/Users/test/Documents/note.md')).resolves.toBeUndefined();
+            // handleEvent is synchronous (void); dispatchEvent runs async internally.
+            // Verify no synchronous exception is thrown when vault.onChange is null.
+            expect(() => getCallback('add')('C:/Users/test/Documents/note.md')).not.toThrow();
         });
-    });});
+    });
+});

@@ -3,7 +3,7 @@
     {
       "virtualPath": "hoarder_rehab",
       "realPath": "D:\\source\\3D-Tech-Solutions\\hoarder_rehab",
-      "enabled": true,
+      "enabled": false,
       "readOnly": false,
       "label": "hoarder_rehab",
       "id": "vrc9nlkmly5w4lq",
@@ -13,10 +13,25 @@
         "node_modules",
         ".obsidian"
       ]
+    },
+    {
+      "virtualPath": "Eski-Enterprises/3D Tech Solutions/tescolopio",
+      "realPath": "C:\\Users\\DigitalByooki\\OneDrive\\tescolopio",
+      "enabled": true,
+      "readOnly": false,
+      "label": "tescolopio",
+      "id": "4z6hirpmlyepvve",
+      "deviceId": "pnvhoinmlwve7nw",
+      "ignoreList": [
+        ".git",
+        "node_modules",
+        ".obsidian"
+      ]
     }
   ],
   "allowlist": [
-    "D:\\source\\3D-Tech-Solutions\\hoarder_rehab"
+    "D:\\source\\3D-Tech-Solutions\\hoarder_rehab",
+    "C:\\Users\\DigitalByooki\\OneDrive\\tescolopio"
   ],
   "dryRun": false,
   "showStatusBar": true,

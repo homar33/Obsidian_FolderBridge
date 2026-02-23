@@ -1,4 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
 	normalizeRealPath,
 	realPathToResourceUrl,
@@ -7,6 +10,7 @@ import {
 	ensureLongPathPrefix,
 	isReservedWindowsFilename,
 	translateFsError,
+	isCloudPlaceholder,
 	isWSL,
 	wslMountToWindowsPath,
 } from '../src/OSHelpers';
@@ -282,6 +286,27 @@ describe('OSHelpers', () => {
 					expect(isWSL()).toBe(false);
 				});
 			});
+		});
+	});
+
+	describe('isCloudPlaceholder', () => {
+		it('returns false for a path that does not exist at all', async () => {
+			const result = await isCloudPlaceholder('/this/path/absolutely/does/not/exist/fb-test');
+			expect(result).toBe(false);
+		});
+
+		it('returns true for a path that exists on disk (simulates cloud placeholder fingerprint)', async () => {
+			// A cloud placeholder (e.g. OneDrive Files On Demand) passes F_OK even
+			// though readFile would throw ENOENT. A real file on disk also passes
+			// F_OK, which is sufficient to verify the true branch of isCloudPlaceholder.
+			const tmpFile = path.join(os.tmpdir(), `fb-placeholder-test-${Date.now()}.md`);
+			await fs.promises.writeFile(tmpFile, '');
+			try {
+				const result = await isCloudPlaceholder(tmpFile);
+				expect(result).toBe(true);
+			} finally {
+				await fs.promises.unlink(tmpFile);
+			}
 		});
 	});
 

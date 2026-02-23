@@ -11,6 +11,14 @@ export class FileWatcher {
     private isIgnored: (name: string, mount: MountPoint) => boolean;
     private watchers: Map<string, chokidar.FSWatcher> = new Map();
 
+    /**
+     * Per-path debounce timers for 'file-changed' events.  Keyed by real path
+     * so that back-to-back writes from external tools (e.g. PlantUML, Pandoc)
+     * are coalesced into a single vault notification.
+     */
+    private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    private static readonly DEBOUNCE_MS = 300;
+
     constructor(app: App, pathMapper: PathMapper, isIgnored: (name: string, mount: MountPoint) => boolean) {
         this.app = app;
         this.pathMapper = pathMapper;
@@ -82,6 +90,10 @@ export class FileWatcher {
      * Stop all active watchers.
      */
     stopAll(): void {
+        // Cancel pending debounce timers before closing so they don't fire
+        // after the plugin is unloaded.
+        for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+        this.debounceTimers.clear();
         for (const watcher of this.watchers.values()) {
             watcher.close();
         }
@@ -89,9 +101,33 @@ export class FileWatcher {
     }
 
     /**
-     * Handle a filesystem event from chokidar.
+     * Synchronous per-event entry point called by chokidar listeners.
+     *
+     * 'file-changed' events are debounced per real path (DEBOUNCE_MS) to
+     * coalesce back-to-back writes from external tools like PlantUML, Pandoc,
+     * or save-on-every-keystroke editors.  All other event types execute
+     * immediately since they represent unambiguous structural changes.
      */
-    private async handleEvent(eventType: string, realPath: string, mount: MountPoint): Promise<void> {
+    private handleEvent(eventType: string, realPath: string, mount: MountPoint): void {
+        if (eventType !== 'file-changed') {
+            void this.dispatchEvent(eventType, realPath, mount);
+            return;
+        }
+        // Cancel any pending notification for this exact path and schedule a
+        // fresh one — timer resets on every write, firing only after the last.
+        const existing = this.debounceTimers.get(realPath);
+        if (existing !== undefined) clearTimeout(existing);
+        const timer = setTimeout(() => {
+            this.debounceTimers.delete(realPath);
+            void this.dispatchEvent(eventType, realPath, mount);
+        }, FileWatcher.DEBOUNCE_MS);
+        this.debounceTimers.set(realPath, timer);
+    }
+
+    /**
+     * Perform the actual vault.onChange notification for a chokidar event.
+     */
+    private async dispatchEvent(eventType: string, realPath: string, mount: MountPoint): Promise<void> {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const vault = this.app.vault as any;
         if (typeof vault.onChange !== 'function') return;

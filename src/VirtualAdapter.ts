@@ -9,6 +9,7 @@ import {
 	ensureLongPathPrefix,
 	isReservedWindowsFilename,
 	translateFsError,
+	isCloudPlaceholder,
 } from './OSHelpers';
 
 /**
@@ -298,8 +299,17 @@ export class VirtualAdapter {
 				return await fs.promises.readFile(realPath, 'utf8');
 			} catch (e: any) {
 				console.error(`[FolderBridge] read failed for "${realPath}":`, e);
-				// Obsidian expects ENOENT for missing files
 				if (e.code === 'ENOENT') {
+					// Check whether the file is an online-only cloud placeholder
+					// (e.g. OneDrive Files On Demand) before surfacing a raw ENOENT.
+					if (await isCloudPlaceholder(realPath)) {
+						throw new Error(
+							`FolderBridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
+							`(OneDrive / SharePoint Files On Demand) and cannot be read while offline. ` +
+							`Right-click the file and choose "Always keep on this device" to make it available locally.`
+						);
+					}
+					// Genuinely missing — preserve ENOENT so Obsidian handles it normally
 					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
 					(err as any).code = 'ENOENT';
 					throw err;
@@ -322,6 +332,13 @@ export class VirtualAdapter {
 				return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 			} catch (e: any) {
 				if (e.code === 'ENOENT') {
+					if (await isCloudPlaceholder(realPath)) {
+						throw new Error(
+							`FolderBridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
+							`(OneDrive / SharePoint Files On Demand) and cannot be read while offline. ` +
+							`Right-click the file and choose "Always keep on this device" to make it available locally.`
+						);
+					}
 					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
 					(err as any).code = 'ENOENT';
 					throw err;
