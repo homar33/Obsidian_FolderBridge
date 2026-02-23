@@ -1,3 +1,6 @@
+# Obsidian plugin runtime settings (local paths, not for version control)
+data.json
+
 # Logs
 logs
 *.log
