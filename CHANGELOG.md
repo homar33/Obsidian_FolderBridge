@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-02-22
+## [0.4.3] - 2026-02-22
+
+### Fixed
+- **Image and PDF loading** — Modern Obsidian uses `app://<vaultId>/` which only resolves vault-relative paths; `app://local/` is deprecated and returns `ERR_FILE_NOT_FOUND` for external mounts. Images, PDFs, and other embedded assets are now served as `data:` URIs (base64-encoded, capped at 10 MB) so they render correctly regardless of vault location.
+- **Rename race on new notes** — When creating a note in a mounted folder and immediately typing a title, Obsidian could call `rename()` before `write()` had finished writing the file to disk (or while OneDrive's sync engine was reprocessing the new file). `rename()` now polls for the source file for up to 2 seconds before giving up, and succeeds silently if the destination already exists (idempotent rename).
+- **Debounce rapid file-change events** — Back-to-back saves from external tools (PlantUML, DataviewJS, watch-mode compilers) previously fired multiple `file-changed` vault notifications. A 300 ms per-path trailing-edge debounce now coalesces these into a single notification.
+- **Cloud placeholder ENOENT** — OneDrive "Files On Demand" online-only files appear accessible but throw `ENOENT` on read. The adapter now detects this fingerprint and surfaces a clear error message with "Always keep on this device" guidance.
+
+### Performance
+- **PathMapper lookup** — `getMountForPath()` was sorting and re-normalizing the mounts array on every call (O(N log N) + alloc per I/O op). Mounts are now sorted and pre-normalized once in `update()` and cached; the hot-path lookup iterates that frozen array with zero allocations.
+
+## [0.4.2] - 2026-02-22
 
 ### Fixed
 - Fixed a critical bug where creating or modifying files in mounted folders would fail because Obsidian's internal file existence checks were receiving generic errors instead of the expected `ENOENT` error code.
