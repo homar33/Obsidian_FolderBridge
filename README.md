@@ -13,7 +13,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are encrypted with the **OS keychain** (Windows DPAPI / macOS Keychain / Linux libsecret) and persist across restarts; the encrypted blob is device-specific and safe to sync.
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
-- **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian to improve performance and reduce clutter.
+- **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. Per-mount entries for precise control, plus a **global ignore list** applied to every mount (pre-filled with `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`).
 - **Read-Only Mounts** — Protect external folders from accidental writes
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked

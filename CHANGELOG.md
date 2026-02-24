@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-02-24
+
+### Added
+- **Global ignore patterns** — a vault-wide ignore list (Settings → Ignore Lists → Global ignore patterns) now applies to every mount automatically. Same three-way pattern syntax as per-mount lists: plain leaf names, globs (`*.tmp`), or path prefixes. Pre-populated with common OS noise files: `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`. Previously these had to be added to each mount individually.
+
 ## [1.1.1] - 2026-02-24
 
 ### Added
