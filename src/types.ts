@@ -23,6 +23,13 @@ export interface MountPoint {
 	mountType?: MountType;            // 'local' (default) or 'webdav'
 	webdavUrl?: string;               // WebDAV server root URL, e.g. "https://mycloud.com/dav"
 	webdavUsername?: string;          // Basic-auth username (password stored in sessionStorage only)
+	/**
+	 * Encrypted password blob produced by CredentialStore.encryptPassword().
+	 * Stored in data.json but device-specific: the OS keychain is the encryption
+	 * key, so the value is useless on any other device even if data.json syncs.
+	 * Format: "enc:<base64-of-safeStorage-encrypted-buffer>"
+	 */
+	encryptedWebdavPassword?: string;
 	/** TRANSIENT — never written to data.json.  Carries the password from the
 	 *  modal → addMount() / updateMount() so it can be saved to sessionStorage
 	 *  under the real (server-assigned) mount id. */

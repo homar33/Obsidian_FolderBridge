@@ -292,12 +292,15 @@ export class MountManagerModal extends Modal {
 		new Setting(webdavSection)
 			.setName('Password')
 			.setDesc(this.editMount?.mountType === 'webdav'
-				? 'Leave blank to keep the existing password. Enter a new value to replace it.'
-				: 'Stored in session memory only — never written to disk or synced.')
+				? (this.editMount.encryptedWebdavPassword
+					? 'Saved securely on this device. Leave blank to keep, or enter a new value to replace.'
+					: 'Leave blank to keep the existing password. Enter a new value to replace it.')
+				: 'Encrypted and saved on this device — survives Obsidian restarts.')
 			.addText(text => {
 				text.inputEl.type = 'password';
 				text.inputEl.style.flex = '1';
-				text.setPlaceholder(this.editMount?.mountType === 'webdav' ? '(unchanged)' : 'password')
+				const hasStored = !!(this.editMount?.encryptedWebdavPassword);
+				text.setPlaceholder(hasStored ? '(saved — leave blank to keep)' : this.editMount?.mountType === 'webdav' ? '(unchanged)' : 'password')
 					.setValue('')
 					.onChange(val => { this.webdavPassword = val; });
 			});
@@ -585,8 +588,10 @@ export class MountManagerModal extends Modal {
 				new Notice('Folder Bridge: WebDAV username is required.');
 				return;
 			}
-			// Require a password only on add; on edit the stored one is kept if blank
-			if (!this.editMount && !this.webdavPassword) {
+			// Require a password on add unless an encrypted one is already stored
+			// (e.g. user opens settings on the same device that originally saved it)
+			const hasStoredPassword = !!(this.editMount?.encryptedWebdavPassword);
+			if (!this.editMount && !this.webdavPassword && !hasStoredPassword) {
 				new Notice('Folder Bridge: WebDAV password is required.');
 				return;
 			}

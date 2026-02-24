@@ -6,6 +6,7 @@ import { SecurityManager } from './src/SecurityManager';
 import { MountManagerModal, getMountStatus, browseFolderOnDisk, VaultFolderPickerModal } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
+import { encryptPassword, decryptPassword } from './src/CredentialStore';
 import { FileWatcher } from './src/FileWatcher';
 import { WebDAVAdapter } from './src/WebDAVAdapter';
 
@@ -154,6 +155,12 @@ export default class FolderBridgePlugin extends Plugin {
 
 			// Register WebDAV adapters for all WebDAV mounts that have a saved password
 			for (const mount of activeMounts.filter(m => m.mountType === 'webdav')) {
+				// Try to decrypt the persisted encrypted password into sessionStorage
+				// so fromMount() can pick it up without a user prompt.
+				if (mount.encryptedWebdavPassword) {
+					const plain = decryptPassword(mount.encryptedWebdavPassword);
+					if (plain) WebDAVAdapter.savePassword(mount.id, plain);
+				}
 				const adapter = WebDAVAdapter.fromMount(mount);
 				if (adapter) this.virtualAdapter?.setWebDAVAdapter(mount.id, adapter);
 			}
@@ -405,7 +412,16 @@ export default class FolderBridgePlugin extends Plugin {
 
 		// Wire up WebDAV adapter (password saved to sessionStorage, never data.json)
 		if (mount.mountType === 'webdav') {
-			if (webdavPassword) WebDAVAdapter.savePassword(mount.id, webdavPassword);
+			if (webdavPassword) {
+				WebDAVAdapter.savePassword(mount.id, webdavPassword);
+				// Also persist an encrypted copy in the mount settings so it
+				// survives Obsidian restarts (device-specific; safe to store).
+				const encrypted = encryptPassword(webdavPassword);
+				if (encrypted) {
+					mount.encryptedWebdavPassword = encrypted;
+					await this.saveSettings();
+				}
+			}
 			const adapter = WebDAVAdapter.fromMount(mount);
 			if (adapter) this.virtualAdapter?.setWebDAVAdapter(mount.id, adapter);
 		}
@@ -443,6 +459,11 @@ export default class FolderBridgePlugin extends Plugin {
 		if (mount.mountType === 'webdav') {
 			this.virtualAdapter?.clearWebDAVAdapter(mount.id);
 			WebDAVAdapter.clearPassword(mount.id);
+			// Remove the persisted encrypted credential from settings
+			if (mount.encryptedWebdavPassword) {
+				delete mount.encryptedWebdavPassword;
+				await this.saveSettings();
+			}
 		}
 
 		await this.saveSettings();
@@ -519,7 +540,15 @@ export default class FolderBridgePlugin extends Plugin {
 		// Recreate WebDAV adapter if any WebDAV fields changed
 		if (updatedMount.mountType === 'webdav') {
 			const { webdavPassword } = newData as MountPoint;
-			if (webdavPassword) WebDAVAdapter.savePassword(id, webdavPassword);
+			if (webdavPassword) {
+				WebDAVAdapter.savePassword(id, webdavPassword);
+				// Persist updated encrypted copy
+				const encrypted = encryptPassword(webdavPassword);
+				if (encrypted) {
+					this.settings.mountPoints[idx].encryptedWebdavPassword = encrypted;
+					await this.saveSettings();
+				}
+			}
 			this.virtualAdapter?.clearWebDAVAdapter(id);
 			const adapter = WebDAVAdapter.fromMount(updatedMount);
 			if (adapter) this.virtualAdapter?.setWebDAVAdapter(id, adapter);
