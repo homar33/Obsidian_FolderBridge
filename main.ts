@@ -1337,6 +1337,72 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 							this.display();
 						},
 					).open();
+				}))
+			.addButton(btn => btn
+				.setButtonText('Export…')
+				.setTooltip('Export all mounts to a JSON file for backup or transfer')
+				.onClick(() => {
+					// Strip secrets before exporting
+					const exportData = {
+						version: '1',
+						exportedAt: new Date().toISOString(),
+						mountPoints: this.plugin.settings.mountPoints.map(m => {
+							// eslint-disable-next-line @typescript-eslint/no-unused-vars
+							const { encryptedWebdavPassword, webdavPassword, ...rest } = m;
+							return rest;
+						}),
+					};
+					const blob = new Blob([JSON.stringify(exportData, null, '\t')], { type: 'application/json' });
+					const url = URL.createObjectURL(blob);
+					const a = document.createElement('a');
+					a.href = url;
+					a.download = 'folderbridge-mounts.json';
+					a.click();
+					URL.revokeObjectURL(url);
+				}))
+			.addButton(btn => btn
+				.setButtonText('Import…')
+				.setTooltip('Import mounts from a previously exported JSON file')
+				.onClick(() => {
+					const input = document.createElement('input');
+					input.type = 'file';
+					input.accept = '.json,application/json';
+					input.onchange = async () => {
+						const file = input.files?.[0];
+						if (!file) return;
+						try {
+							const text = await file.text();
+							const parsed = JSON.parse(text);
+							const mounts: MountPoint[] = Array.isArray(parsed)
+								? parsed                        // legacy bare array
+								: parsed.mountPoints ?? [];    // { version, mountPoints }
+							if (!Array.isArray(mounts) || mounts.length === 0) {
+								new Notice('Folder Bridge: No mount points found in the selected file.');
+								return;
+							}
+							let added = 0, skipped = 0;
+							for (const m of mounts) {
+								if (typeof m.virtualPath !== 'string' || typeof m.realPath !== 'string') {
+									skipped++; continue;
+								}
+								// Assign fresh ID and current device unless file already has a matching one
+								const fresh: MountPoint = {
+									...m,
+									id: generateId(),
+									deviceId: this.plugin.settings.deviceId,
+									encryptedWebdavPassword: undefined,
+									webdavPassword: undefined,
+								};
+								await this.plugin.addMount(fresh);
+								added++;
+							}
+							new Notice(`Folder Bridge: Imported ${added} mount(s).${skipped ? ` ${skipped} skipped (invalid).` : ''}`);
+							this.display();
+						} catch (e) {
+							new Notice('Folder Bridge: Failed to parse the selected file. Is it a valid Folder Bridge export?');
+						}
+					};
+					input.click();
 				}));
 
 		// Render each existing mount (status loaded async below)

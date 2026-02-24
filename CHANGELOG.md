@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-02-24
+
+### Added
+- **Import / Export mount configuration** — two new buttons in Settings → Mount Points:
+  - **Export…** downloads a `folderbridge-mounts.json` file containing all configured mounts. Encrypted credentials are stripped before export so the file is safe to share or check into git.
+  - **Import…** opens a file picker, reads the JSON, and appends every valid mount to your current configuration. Each imported mount gets a fresh ID and is assigned to the current device. Useful for moving a vault to a new machine or copying a mount setup between vaults.
+
 ## [1.1.3] - 2026-02-24
 
 ### Added
