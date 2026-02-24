@@ -63,7 +63,8 @@ export class SFTPAdapter {
     // The sftp client instance; recreated on connect
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private sftp: any = null;
-    private connecting = false;
+    /** In-flight connect promise — all concurrent callers await the same one. */
+    private connectingPromise: Promise<void> | null = null;
 
     constructor(
         host: string,
@@ -125,36 +126,38 @@ export class SFTPAdapter {
 
     private async connect(): Promise<void> {
         if (this.sftp && this.isSFTPReady()) return;
-        if (this.connecting) {
-            // Wait until the pending connect resolves
-            await new Promise<void>((resolve) => setTimeout(resolve, 200));
-            return;
+        if (this.connectingPromise) {
+            // Another caller is already connecting — await the same Promise so
+            // we don't race: when it resolves this.sftp will be set.
+            return this.connectingPromise;
         }
-        this.connecting = true;
-        try {
-            const SFTPClient = loadSFTPClient();
-            const client = new SFTPClient();
+        this.connectingPromise = this._doConnect().finally(() => {
+            this.connectingPromise = null;
+        });
+        return this.connectingPromise;
+    }
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const connectOptions: any = {
-                host: this.host,
-                port: this.port,
-                username: this.username,
-            };
+    private async _doConnect(): Promise<void> {
+        const SFTPClient = loadSFTPClient();
+        const client = new SFTPClient();
 
-            if (this.privateKeyPath) {
-                const fs = (require as any)('fs'); // eslint-disable-line @typescript-eslint/no-explicit-any
-                connectOptions.privateKey = fs.readFileSync(this.privateKeyPath);
-                if (this.passphrase) connectOptions.passphrase = this.passphrase;
-            } else if (this.password) {
-                connectOptions.password = this.password;
-            }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const connectOptions: any = {
+            host: this.host,
+            port: this.port,
+            username: this.username,
+        };
 
-            await client.connect(connectOptions);
-            this.sftp = client;
-        } finally {
-            this.connecting = false;
+        if (this.privateKeyPath) {
+            const fs = (require as any)('fs'); // eslint-disable-line @typescript-eslint/no-explicit-any
+            connectOptions.privateKey = fs.readFileSync(this.privateKeyPath);
+            if (this.passphrase) connectOptions.passphrase = this.passphrase;
+        } else if (this.password) {
+            connectOptions.password = this.password;
         }
+
+        await client.connect(connectOptions);
+        this.sftp = client;
     }
 
     private isSFTPReady(): boolean {

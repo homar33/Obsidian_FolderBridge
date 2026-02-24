@@ -246,27 +246,26 @@ export default class FolderBridgePlugin extends Plugin {
 
 			const activeMounts = this.settings.mountPoints.filter(m => m.enabled && (m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts));
 
-			// Register WebDAV adapters for all WebDAV mounts that have a saved password
-			for (const mount of activeMounts.filter(m => m.mountType === 'webdav')) {
-				// Try to decrypt the persisted encrypted password into sessionStorage
-				// so fromMount() can pick it up without a user prompt.
-				if (mount.encryptedWebdavPassword) {
-					const plain = decryptCredential(mount.encryptedWebdavPassword);
-					if (plain) saveWebDAVPassword(mount.id, plain);
-				}
-				const adapter = WebDAVAdapter.fromMount(mount);
-				if (adapter) this.virtualAdapter?.setWebDAVAdapter(mount.id, adapter);
-
-				// S3 mounts: decrypt secret key so S3Adapter.fromMount() can build the client.
-				if (mount.mountType === 's3' && mount.encryptedS3SecretKey) {
-					const plain = decryptCredential(mount.encryptedS3SecretKey);
-					if (plain) saveSessionCredential('s3', mount.id, plain);
-				}
-				const s3 = S3Adapter.fromMount(mount);
-				if (s3) this.virtualAdapter?.setS3Adapter(mount.id, s3);
-
-				// SFTP mounts: decrypt credentials into sessionStorage.
-				if (mount.mountType === 'sftp') {
+			// Register adapters for all active mounts — each type handled in its own branch.
+			for (const mount of activeMounts) {
+				if (mount.mountType === 'webdav') {
+					// Decrypt the persisted password into sessionStorage so fromMount() can pick it up.
+					if (mount.encryptedWebdavPassword) {
+						const plain = decryptCredential(mount.encryptedWebdavPassword);
+						if (plain) saveWebDAVPassword(mount.id, plain);
+					}
+					const adapter = WebDAVAdapter.fromMount(mount);
+					if (adapter) this.virtualAdapter?.setWebDAVAdapter(mount.id, adapter);
+				} else if (mount.mountType === 's3') {
+					// Decrypt secret key so S3Adapter.fromMount() can build the client.
+					if (mount.encryptedS3SecretKey) {
+						const plain = decryptCredential(mount.encryptedS3SecretKey);
+						if (plain) saveSessionCredential('s3', mount.id, plain);
+					}
+					const s3 = S3Adapter.fromMount(mount);
+					if (s3) this.virtualAdapter?.setS3Adapter(mount.id, s3);
+				} else if (mount.mountType === 'sftp') {
+					// Decrypt SFTP credentials into sessionStorage.
 					if (mount.encryptedSftpPassword) {
 						const plain = decryptCredential(mount.encryptedSftpPassword);
 						if (plain) saveSessionCredential('sftp-pw', mount.id, plain);
@@ -1598,16 +1597,19 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 						version: '1',
 						exportedAt: new Date().toISOString(),
 						mountPoints: this.plugin.settings.mountPoints.map(m => {
-							// Strip all stored credentials — device-specific and useless on other machines
-							// eslint-disable-next-line @typescript-eslint/no-unused-vars
-							const {
-								encryptedWebdavPassword, webdavPassword,
-								encryptedS3SecretKey, s3SecretKey,
-								encryptedSftpPassword, sftpPassword,
-								encryptedSftpPassphrase, sftpPassphrase,
-								...rest
-							} = m;
-							return rest;
+							// Strip all stored credentials — device-specific and useless on other machines.
+							// JSON.stringify omits undefined values, so these fields are excluded from export.
+							return {
+								...m,
+								encryptedWebdavPassword: undefined,
+								webdavPassword: undefined,
+								encryptedS3SecretKey: undefined,
+								s3SecretKey: undefined,
+								encryptedSftpPassword: undefined,
+								sftpPassword: undefined,
+								encryptedSftpPassphrase: undefined,
+								sftpPassphrase: undefined,
+							};
 						}),
 					};
 					const blob = new Blob([JSON.stringify(exportData, null, '\t')], { type: 'application/json' });
@@ -1664,7 +1666,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 							}
 							new Notice(`Folder Bridge: Imported ${added} mount(s).${skipped ? ` ${skipped} skipped (invalid).` : ''}`);
 							this.display();
-						} catch (e) {
+						} catch {
 							new Notice('Folder Bridge: Failed to parse the selected file. Is it a valid Folder Bridge export?');
 						}
 					};

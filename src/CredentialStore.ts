@@ -31,7 +31,6 @@ const SESSION_NS = 'folderbridge';
 // Electron safeStorage accessor
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SafeStorage = {
     isEncryptionAvailable(): boolean;
     encryptString(plainText: string): Buffer;

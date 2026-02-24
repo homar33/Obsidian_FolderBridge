@@ -102,7 +102,7 @@ export class S3Adapter {
             (mount.id ? loadSessionCredential('s3', mount.id) : null);
         if (!secret) return null;
 
-        return new S3Adapter(
+        const s3 = new S3Adapter(
             mount.s3Bucket,
             mount.s3Region,
             mount.s3AccessKeyId,
@@ -112,6 +112,8 @@ export class S3Adapter {
                 forcePathStyle: mount.s3ForcePathStyle ?? false,
             }
         );
+        s3.setPrefix(mount.realPath);
+        return s3;
     }
 
     // ------------------------------------------------------------------
