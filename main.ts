@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile } from 'obsidian';
+import { App, FuzzySuggestModal, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile } from 'obsidian';
 import { FolderBridgeSettings, MountPoint, DEFAULT_SETTINGS } from './src/types';
 import { PathMapper } from './src/PathMapper';
 import { VirtualAdapter } from './src/VirtualAdapter';
@@ -82,6 +82,92 @@ export default class FolderBridgePlugin extends Plugin {
 				}
 				new Notice('Folder Bridge: Mounts refreshed');
 			}
+		});
+
+		// Command: open add-mount modal
+		this.addCommand({
+			id: 'add-mount',
+			name: 'Add mount',
+			callback: () => {
+				new MountManagerModal(this.app, this.security, (mount) => this.addMount(mount)).open();
+			},
+		});
+
+		// Command: open plugin settings tab
+		this.addCommand({
+			id: 'open-settings',
+			name: 'Open settings',
+			callback: () => {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(this.app as any).setting?.open?.();
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(this.app as any).setting?.openTabById?.('folderbridge');
+			},
+		});
+
+		// Command: toggle a mount (picker modal)
+		this.addCommand({
+			id: 'toggle-mount',
+			name: 'Toggle mount on/off…',
+			callback: () => {
+				const myMounts = this.settings.mountPoints.filter(
+					m => m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts,
+				);
+				if (myMounts.length === 0) {
+					new Notice('Folder Bridge: No mounts configured.');
+					return;
+				}
+				// Inline FuzzySuggestModal — avoids a separate file for a small feature
+				// eslint-disable-next-line @typescript-eslint/no-this-alias
+				const plugin = this;
+				const modal = new (class extends FuzzySuggestModal<MountPoint> {
+					getItems() { return myMounts; }
+					getItemText(m: MountPoint) {
+						const status = m.enabled ? '✅' : '⏸';
+						return `${status}  ${m.label || m.virtualPath}`;
+					}
+					async onChooseItem(m: MountPoint) {
+						const enabling = !m.enabled;
+						// Must remove BEFORE setting enabled=false so adapter can still resolve paths
+						if (!enabling) await plugin.notifyVaultMountRemoved(m);
+						m.enabled = enabling;
+						await plugin.saveSettings();
+						plugin.pathMapper.update(plugin.settings.mountPoints, plugin.settings.deviceId);
+						plugin.updateStatusBar();
+						if (enabling) {
+							await plugin.notifyVaultMountAdded(m);
+							new Notice(`Folder Bridge: "${m.label || m.virtualPath}" enabled.`);
+						} else {
+							new Notice(`Folder Bridge: "${m.label || m.virtualPath}" disabled.`);
+						}
+					}
+				})(this.app);
+				modal.setPlaceholder('Choose a mount to toggle on / off');
+				modal.open();
+			},
+		});
+
+		// Command: reconnect all unreachable mounts
+		this.addCommand({
+			id: 'reconnect-mounts',
+			name: 'Reconnect unreachable mounts',
+			callback: async () => {
+				const unreachable = this.settings.mountPoints.filter(
+					m => m.enabled && !this.mountHealthMap.get(m.id),
+				);
+				if (unreachable.length === 0) {
+					new Notice('Folder Bridge: All mounts are reachable.');
+					return;
+				}
+				let reconnected = 0;
+				for (const mount of unreachable) {
+					try {
+						await this.reconnectMount(mount);
+						reconnected++;
+					} catch { /* individual failure already noticed inside reconnectMount */ }
+				}
+				new Notice(`Folder Bridge: Reconnected ${reconnected} / ${unreachable.length} mount(s).`);
+			},
 		});
 
 		// Add context menu item to ignore files/folders

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-02-24
+
+### Added
+- **Command palette integration** — four new commands accessible from the Obsidian command palette (`Ctrl/Cmd+P`):
+  - **Folder Bridge: Add mount** — opens the Add Mount dialog directly.
+  - **Folder Bridge: Toggle mount on/off…** — fuzzy-search picker listing every mount (with ✅/⏸ status); choose one to toggle it enabled or disabled instantly.
+  - **Folder Bridge: Reconnect unreachable mounts** — retries connection for every enabled mount currently showing as unreachable; reports how many were recovered.
+  - **Folder Bridge: Open settings** — navigates straight to the Folder Bridge settings tab.
+- All new commands appear in the Obsidian hotkey settings screen so users can assign custom keyboard shortcuts.
+
 ## [1.1.5] - 2026-02-24
 
 ### Added
