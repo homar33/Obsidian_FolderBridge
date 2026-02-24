@@ -226,7 +226,9 @@ export class SFTPAdapter {
         try {
             const info = await this.sftp.stat(this.toRemotePath(serverPath));
             return {
-                type: info.isDirectory ? (info.isDirectory() ? 'folder' : 'file') : (info.mode & 0o040000 ? 'folder' : 'file'),
+                type: typeof info.isDirectory === 'function'
+                    ? (info.isDirectory() ? 'folder' : 'file')
+                    : (info.mode & 0o040000 ? 'folder' : 'file'),
                 ctime: info.atime ? info.atime * 1000 : 0,
                 mtime: info.mtime ? info.mtime * 1000 : 0,
                 size: info.size ?? 0,
