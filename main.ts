@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile, Platform } from 'obsidian';
 import { FolderBridgeSettings, MountPoint, DEFAULT_SETTINGS } from './src/types';
 import { PathMapper } from './src/PathMapper';
 import { VirtualAdapter } from './src/VirtualAdapter';
@@ -6,10 +6,12 @@ import { SecurityManager } from './src/SecurityManager';
 import { MountManagerModal, getMountStatus, browseFolderOnDisk, VaultFolderPickerModal } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
-import * as path from 'path';
-import * as fs from 'fs';
 import { FileWatcher } from './src/FileWatcher';
 import { WebDAVAdapter } from './src/WebDAVAdapter';
+
+// Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,7 +100,7 @@ export default class FolderBridgePlugin extends Plugin {
 							.setIcon('folder-input')
 							.onClick(() => {
 								new VaultFolderPickerModal(this.app, async (newParent) => {
-									const leaf = path.posix.basename(normalizePath(mount.virtualPath));
+									const leaf = normalizePath(mount.virtualPath).split('/').pop() || '';
 									const newVirtualPath = newParent
 										? normalizePath(`${newParent}/${leaf}`)
 										: leaf;
@@ -813,9 +815,12 @@ export default class FolderBridgePlugin extends Plugin {
 							reachable = await adapter.exists(mount.realPath);
 						}
 					} else {
-						const realPath = this.pathMapper.getEffectiveRealPath(mount);
-						await fs.promises.access(realPath, fs.constants.F_OK);
-						reachable = true;
+						// Local mounts require Node.js fs — unavailable on mobile
+						if (fs && fs.promises) {
+							const realPath = this.pathMapper.getEffectiveRealPath(mount);
+							await fs.promises.access(realPath, fs.constants.F_OK);
+							reachable = true;
+						}
 					}
 				} catch {
 					reachable = false;
@@ -857,9 +862,11 @@ export default class FolderBridgePlugin extends Plugin {
 				const adapter = WebDAVAdapter.fromMount(mount);
 				if (adapter) reachable = await adapter.exists(mount.realPath);
 			} else {
-				const realPath = this.pathMapper.getEffectiveRealPath(mount);
-				await fs.promises.access(realPath, fs.constants.F_OK);
-				reachable = true;
+				if (fs && fs.promises) {
+					const realPath = this.pathMapper.getEffectiveRealPath(mount);
+					await fs.promises.access(realPath, fs.constants.F_OK);
+					reachable = true;
+				}
 			}
 		} catch {
 			reachable = false;

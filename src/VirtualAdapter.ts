@@ -1,6 +1,4 @@
 import { normalizePath } from 'obsidian';
-import * as fs from 'fs';
-import * as path from 'path';
 import { PathMapper } from './PathMapper';
 import { SecurityManager } from './SecurityManager';
 import { MountPoint } from './types';
@@ -13,6 +11,14 @@ import {
 	translateFsError,
 	isCloudPlaceholder,
 } from './OSHelpers';
+
+// Lazy-loaded Node.js builtins — wrapped in try/catch so the bundle loads on
+// Obsidian Mobile (Capacitor) where Node APIs are unavailable.  On mobile these
+// will be null; local-mount operations gracefully fail while WebDAV mounts work.
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 /**
  * VirtualAdapter is a shim that wraps Obsidian's built-in FileSystemAdapter.
@@ -287,7 +293,7 @@ export class VirtualAdapter {
 			? virtualParentPath.slice(mountVirtual.length + 1)
 			: (virtualParentPath === mountVirtual ? '' : undefined);
 
-		let entries: fs.Dirent[];
+		let entries: import('fs').Dirent[];
 		try {
 			entries = await fs.promises.readdir(realDirPath, { withFileTypes: true });
 		} catch (e) {
