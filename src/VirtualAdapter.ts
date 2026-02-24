@@ -15,9 +15,9 @@ import {
 // Lazy-loaded Node.js builtins — wrapped in try/catch so the bundle loads on
 // Obsidian Mobile (Capacitor) where Node APIs are unavailable.  On mobile these
 // will be null; local-mount operations gracefully fail while WebDAV mounts work.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 /**
@@ -216,9 +216,9 @@ export class VirtualAdapter {
 					mtime: s.mtimeMs,
 					size: s.size,
 				};
-			} catch (e: any) {
+			} catch (e) {
 				// Obsidian expects null for missing files, not an error
-				if (e.code !== 'ENOENT') {
+				if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
 					console.debug(`[FolderBridge] stat failed for "${realPath}":`, e);
 				}
 				return null;
@@ -373,9 +373,9 @@ export class VirtualAdapter {
 			this.assertAllowed(realPath);
 			try {
 				return await fs.promises.readFile(realPath, 'utf8');
-			} catch (e: any) {
+			} catch (e) {
 				console.error(`[FolderBridge] read failed for "${realPath}":`, e);
-				if (e.code === 'ENOENT') {
+				if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
 					// Check whether the file is an online-only cloud placeholder
 					// (e.g. OneDrive Files On Demand) before surfacing a raw ENOENT.
 					if (await isCloudPlaceholder(realPath)) {
@@ -387,7 +387,7 @@ export class VirtualAdapter {
 					}
 					// Genuinely missing — preserve ENOENT so Obsidian handles it normally
 					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
-					(err as any).code = 'ENOENT';
+					(err as NodeJS.ErrnoException).code = 'ENOENT';
 					throw err;
 				}
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'read')}`);
@@ -408,8 +408,8 @@ export class VirtualAdapter {
 				const buf = await fs.promises.readFile(realPath);
 				// Return a proper ArrayBuffer (buf.buffer may be a shared Buffer pool slice)
 				return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-			} catch (e: any) {
-				if (e.code === 'ENOENT') {
+			} catch (e) {
+				if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
 					if (await isCloudPlaceholder(realPath)) {
 						throw new Error(
 							`Folder Bridge: "${path.basename(realPath)}" is a cloud-only placeholder ` +
@@ -418,7 +418,7 @@ export class VirtualAdapter {
 						);
 					}
 					const err = new Error(`ENOENT: no such file or directory, open '${realPath}'`);
-					(err as any).code = 'ENOENT';
+					(err as NodeJS.ErrnoException).code = 'ENOENT';
 					throw err;
 				}
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'readBinary')}`);

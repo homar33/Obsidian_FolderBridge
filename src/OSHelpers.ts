@@ -4,9 +4,9 @@ import { OSPlatform } from './types';
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor) where
 // Node APIs are unavailable.  On mobile these will be null; all functions
 // guarded behind platform checks or try-catch will gracefully return early.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,6 @@ export function getPlatform(): OSPlatform {
 	// On Obsidian Mobile (Capacitor / Android / iOS), the Node.js `process`
 	// global is not available.  Fall back to the Obsidian Platform API instead.
 	if (Platform.isMobile) return 'unknown';
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const platform = (typeof process !== 'undefined') ? process.platform : undefined;
 	switch (platform) {
 		case 'win32': return 'windows';

@@ -61,9 +61,7 @@ export class FileWatcher {
         // Load Node.js modules lazily — these are only available on desktop.
         // Uses FileWatcher._loadChokidar so tests can supply a mock by reassigning it.
         const chokidar = FileWatcher._loadChokidar();
-        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-        const fs = (require as any)('fs') as typeof import('fs');
-        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const path = (require as any)('path') as typeof import('path');
 
         // [FEATURE_20260222] Initialize chokidar watcher for the mount's real path

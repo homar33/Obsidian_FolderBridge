@@ -4,7 +4,7 @@ import { SecurityManager } from '../SecurityManager';
 import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpers';
 
 // Lazy-loaded — unavailable on Obsidian Mobile (Capacitor).
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------

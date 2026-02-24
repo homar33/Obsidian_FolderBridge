@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile, Platform } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, normalizePath, TFolder, TFile } from 'obsidian';
 import { FolderBridgeSettings, MountPoint, DEFAULT_SETTINGS } from './src/types';
 import { PathMapper } from './src/PathMapper';
 import { VirtualAdapter } from './src/VirtualAdapter';
@@ -11,7 +11,7 @@ import { FileWatcher } from './src/FileWatcher';
 import { WebDAVAdapter } from './src/WebDAVAdapter';
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
