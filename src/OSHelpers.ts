@@ -208,7 +208,7 @@ const DATA_URI_MIME: Record<string, string> = {
 	'.pdf': 'application/pdf',
 };
 
-/** Maximum file size that we will read synchronously to produce a data: URI. */
+/** Default maximum file size that we will read synchronously to produce a data: URI. */
 const MAX_SYNC_DATA_URI_BYTES = 10 * 1024 * 1024; // 10 MB
 
 /**
@@ -228,7 +228,7 @@ const MAX_SYNC_DATA_URI_BYTES = 10 * 1024 * 1024; // 10 MB
  * resolve to ERR_FILE_NOT_FOUND.  A data: URI is the only reliable,
  * CSP-compliant way to embed external binary assets in the renderer.
  */
-export function tryReadAsDataUri(realPath: string): string | null {
+export function tryReadAsDataUri(realPath: string, maxBytes = MAX_SYNC_DATA_URI_BYTES): string | null {
 	// Node.js APIs unavailable on mobile — all local file reads return null.
 	if (!fs || !path) return null;
 	const ext = path.extname(realPath).toLowerCase();
@@ -236,7 +236,7 @@ export function tryReadAsDataUri(realPath: string): string | null {
 	if (!mime) return null;
 	try {
 		const stat = fs.statSync(realPath);
-		if (stat.size > MAX_SYNC_DATA_URI_BYTES) return null;
+		if (stat.size > maxBytes) return null;
 		const data = fs.readFileSync(realPath);
 		return `data:${mime};base64,${data.toString('base64')}`;
 	} catch {

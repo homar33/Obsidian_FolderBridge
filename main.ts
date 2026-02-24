@@ -268,6 +268,7 @@ export default class FolderBridgePlugin extends Plugin {
 			this.pathMapper,
 			this.security,
 			this.settings.dryRun,
+			(this.settings.maxDataUriMB ?? 10) * 1024 * 1024,
 			async (mount: MountPoint) => {
 				let action: 'unmount' | 'delete' | 'cancel' = 'cancel';
 
@@ -348,7 +349,7 @@ export default class FolderBridgePlugin extends Plugin {
 				// vault-relative paths — external mounts get ERR_FILE_NOT_FOUND.
 				// Serve supported binary assets (images, PDFs) as data: URIs instead.
 				// For large or unsupported files fall back to app://local/ (legacy).
-				return tryReadAsDataUri(realPath) ?? realPathToResourceUrl(realPath);
+				return tryReadAsDataUri(realPath, (this.settings.maxDataUriMB ?? 10) * 1024 * 1024) ?? realPathToResourceUrl(realPath);
 			}
 			// Fallback to original vault method for non-mounted files
 			if (typeof this.originalVaultGetResourcePath === 'function') {
@@ -1073,6 +1074,21 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 					this.plugin.settings.allowForeignMounts = val;
 					await this.plugin.saveSettings();
 					this.display(); // Refresh to update toggle states
+				}));
+
+		new Setting(containerEl)
+			.setName('Image / PDF size cap (MB)')
+			.setDesc('Maximum file size that will be embedded as a data: URI (used for images and PDFs in external mounts). Files larger than this fall back to a resource URL. Default: 10 MB.')
+			.addText(text => text
+				.setPlaceholder('10')
+				.setValue(String(this.plugin.settings.maxDataUriMB ?? 10))
+				.onChange(async val => {
+					const parsed = parseFloat(val);
+					if (!isNaN(parsed) && parsed > 0) {
+						this.plugin.settings.maxDataUriMB = parsed;
+						await this.plugin.saveSettings();
+						this.plugin.virtualAdapter?.setMaxDataUri(parsed * 1024 * 1024);
+					}
 				}));
 
 		// ── Ignore Lists ─────────────────────────────────────────────────

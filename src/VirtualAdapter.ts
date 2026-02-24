@@ -42,12 +42,15 @@ export class VirtualAdapter {
 	private isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean;
 	/** WebDAV client instances keyed by mount.id, managed by the plugin. */
 	private webdavAdapters: Map<string, WebDAVAdapter> = new Map();
+	/** Max bytes for data: URI generation; configurable via plugin settings. */
+	private maxDataUriBytes: number;
 
 	constructor(
 		original: unknown,
 		pathMapper: PathMapper,
 		security: SecurityManager,
 		dryRun = false,
+		maxDataUriBytes = 10 * 1024 * 1024,
 		onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>,
 		onMountRootMove: (mount: MountPoint, newVirtualPath: string) => Promise<void>,
 		isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean
@@ -56,6 +59,7 @@ export class VirtualAdapter {
 		this.pathMapper = pathMapper;
 		this.security = security;
 		this.dryRun = dryRun;
+		this.maxDataUriBytes = maxDataUriBytes;
 		this.onMountRootDelete = onMountRootDelete;
 		this.onMountRootMove = onMountRootMove;
 		this.isIgnored = isIgnored;
@@ -73,6 +77,9 @@ export class VirtualAdapter {
 
 	/** Update dry-run mode without reloading the plugin. */
 	setDryRun(val: boolean): void { this.dryRun = val; }
+
+	/** Update the data: URI size cap without reloading the plugin. */
+	setMaxDataUri(bytes: number): void { this.maxDataUriBytes = bytes; }
 
 	// ------------------------------------------------------------------
 	// Delegation helper
@@ -528,8 +535,9 @@ export class VirtualAdapter {
 			// Obsidian's renderer calls the vault-level method directly, not this adapter method.
 			// Modern Obsidian (app://<vaultId>/) only serves vault-relative paths, so
 			// external mounts must be served as data: URIs instead.
+			// The size cap is configurable via plugin settings (maxDataUriMB).
 			const realPath = this.pathMapper.toRealPath(normalizedPath, mount);
-			return tryReadAsDataUri(realPath) ?? realPathToResourceUrl(realPath);
+			return tryReadAsDataUri(realPath, this.maxDataUriBytes) ?? realPathToResourceUrl(realPath);
 		}
 		return this.orig().getResourcePath(normalizedPath);
 	}
