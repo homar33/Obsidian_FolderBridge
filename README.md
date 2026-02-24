@@ -10,7 +10,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Multi-Root Workspaces** — Work with files from multiple locations simultaneously
 - **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
 - **Zero Duplication** — Files are read and written directly from their real locations
-- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are stored in session memory only, never synced.
+- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are encrypted with the **OS keychain** (Windows DPAPI / macOS Keychain / Linux libsecret) and persist across restarts; the encrypted blob is device-specific and safe to sync.
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian to improve performance and reduce clutter.
@@ -129,7 +129,7 @@ Mount a remote Nextcloud, ownCloud, or generic WebDAV server as a vault folder.
 4. **Virtual path** — where it will appear in your vault, e.g. `Remote/Notes`
 5. **Username** — your WebDAV username
 6. **Password** — your WebDAV password  
-   > ⚠️ The password is stored in **session memory only**. It is never written to `data.json` or synced to other devices. You will be prompted again when Obsidian restarts.
+   > 🔒 The password is encrypted with your **OS keychain** (Windows DPAPI / macOS Keychain / Linux libsecret) and stored in `data.json`. It persists across Obsidian restarts — no re-entry needed. The encrypted blob is device-specific; other devices cannot decrypt it even if `data.json` syncs. On mobile, passwords fall back to session memory only.
 7. Click **Validate & Add**
 
 Folder Bridge will test the connection before saving. If the server is unreachable, you'll see an error with the reason.
@@ -318,7 +318,9 @@ See [Ignore List](#ignore-list) in the Usage Guide above for full documentation.
 
 ### Mobile (iOS / Android)
 
-Folder Bridge is **not supported on mobile**. Obsidian's iOS and Android sandbox prevents plugins from accessing filesystem paths outside the vault container. There is no workaround at the OS level — this is an intentional platform security restriction.
+**Android** — WebDAV mounts are fully supported on Obsidian for Android (v1.1.0+). Connect to Nextcloud, ownCloud, a NAS, or any WebDAV server from your phone — no extra apps required. Local filesystem mounts are not available due to Android's app sandbox; only WebDAV mounts work. See the [Android Setup Guide](docs/ANDROID_SETUP.md) for step-by-step instructions.
+
+**iOS** — Not yet tested. WebDAV may work in theory (same code paths as Android) but is not officially supported. Feedback welcome via [GitHub Issues](https://github.com/tescolopio/Obsidian_FolderBridge/issues).
 
 ---
 
@@ -380,8 +382,10 @@ npm run version  # Bump version in manifest.json and versions.json
 │   ├── VirtualAdapter.ts      # Virtual filesystem adapter (core)
 │   ├── SecurityManager.ts     # Allowlist enforcement and validation
 │   ├── OSHelpers.ts           # Platform detection and Windows helpers
+│   ├── CredentialStore.ts     # OS-keychain credential encryption (Electron safeStorage)
+│   ├── FileWatcher.ts         # chokidar-based background file watcher
 │   └── ui/
-│       └── MountManagerModal.ts  # Add-mount dialog
+│       └── MountManagerModal.ts  # Add/edit mount dialog
 ├── tests/                     # Vitest unit tests
 ├── manifest.json              # Plugin metadata
 ├── versions.json              # Version → minAppVersion map

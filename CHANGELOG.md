@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-02-24
+
+### Added
+- **Persistent WebDAV credentials** — WebDAV passwords are now encrypted with the OS keychain (Windows DPAPI, macOS Keychain, Linux libsecret) via Electron's `safeStorage` API and stored in `data.json`. Obsidian no longer prompts for your password after a restart — the adapter reconnects automatically on startup. The encrypted blob is device-specific and cannot be decrypted on any other device, so syncing `data.json` remains safe. On mobile (Capacitor) `safeStorage` is unavailable; the plugin falls back transparently to the previous session-memory behaviour.
+- New `src/CredentialStore.ts` module encapsulating all keychain interactions.
+
+### Fixed
+- Resolved all ESLint errors and warnings: removed unused `Platform` import in `main.ts`, eliminated stale `@typescript-eslint/no-require-imports` disable directives across five files, replaced `catch (e: any)` patterns with un-annotated catches and explicit `NodeJS.ErrnoException` casts in `VirtualAdapter.ts`, removed unused `fs` variable in `FileWatcher.ts`.
+
+## [1.1.0] - 2026-02-24
+
+### Added
+- **Android / mobile support** — FolderBridge now loads on Obsidian for Android. WebDAV mounts work fully on mobile: browse, read, write, and create files on your Nextcloud, ownCloud, NAS, or any WebDAV server directly from your phone. No extra apps required. The mount modal automatically hides local-only fields on mobile. See [Android Setup Guide](docs/ANDROID_SETUP.md).
+- **Configurable image / PDF size cap** — The data-URI size limit for embedded images and PDFs (previously hardcoded at 10 MB) is now a plugin setting (`maxDataUriMB`, found under General → Image / PDF size cap). Raise it for high-resolution images; lower it to reduce memory pressure on mobile or slow devices.
+
 ## [1.0.0] - 2026-02-23
 
 ### Changed
