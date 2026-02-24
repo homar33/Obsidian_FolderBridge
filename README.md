@@ -10,7 +10,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Multi-Root Workspaces** — Work with files from multiple locations simultaneously
 - **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
 - **Zero Duplication** — Files are read and written directly from their real locations
-- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Credentials are stored in session memory only, never synced.
+- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are stored in session memory only, never synced.
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian to improve performance and reduce clutter.
@@ -28,7 +28,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 | Windows | ✅ Tested | Full support — long paths, UNC, NTFS quirks all handled |
 | macOS | ⚠️ Untested | POSIX code paths are implemented; not yet officially tested. Community reports welcome. |
 | Linux | ✅ Tested | POSIX paths, works including WSL |
-| Android | ⚠️ Beta | WebDAV mounts only — requires a local WebDAV server app. See [Android Setup Guide](docs/ANDROID_SETUP.md) |
+| Android | ⚠️ Beta | WebDAV mounts — connect to Nextcloud, NAS, or any WebDAV server from your phone. See [Android Setup Guide](docs/ANDROID_SETUP.md) |
 | iOS | ❌ Not supported | Not yet tested on iOS; WebDAV may work in theory |
 
 ---

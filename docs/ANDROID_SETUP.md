@@ -1,57 +1,69 @@
-# Android Setup Guide
+# Android / Mobile Setup Guide
 
-Access files and folders anywhere on your Android device from inside Obsidian using FolderBridge + a local WebDAV server app.
+Use FolderBridge on your Android phone to access files stored on your **Nextcloud, NAS, or any WebDAV server** — no computer required, no cable, no sync client.
 
 ---
 
-## How it works
+## The pitch
 
-Obsidian on Android is sandboxed — plugins cannot read files outside the vault directly. FolderBridge works around this by talking HTTP instead of touching the filesystem. A free Android app runs a WebDAV server on `localhost`, exposing your device's storage (Downloads, DCIM, Documents, any folder). FolderBridge connects to that local server and surfaces the files as a virtual folder inside your vault.
+If you run Nextcloud at home, have a NAS, or keep work files on a server, FolderBridge on mobile gives you full read/write access to those files inside Obsidian — from anywhere with internet (or WiFi).
 
 ```
-Obsidian (FolderBridge plugin)
-  → HTTP  →  WebDAV server app (localhost:PORT)
-               → Android storage (Downloads/, DCIM/, Documents/, etc.)
+Your Android phone
+  → FolderBridge (HTTP/WebDAV)
+    → Nextcloud / NAS / home server
+      → Your project files, documents, reference library
 ```
 
-No internet connection required. Everything stays on-device.
+No extra apps. No setup on the phone beyond installing FolderBridge. Just enter your WebDAV URL and credentials.
 
 ---
 
-## Step 1 — Install a WebDAV server app
+## Step 1 — Get your WebDAV URL
 
-### Recommended: CX File Explorer (free)
+### Nextcloud (most common)
+Your WebDAV endpoint is:
+```
+https://your-nextcloud.example.com/remote.php/dav/files/YOUR_USERNAME/
+```
+Replace the domain and username. Find it in Nextcloud → Files → ⚙️ → **WebDAV** (bottom of the sidebar).
 
-1. Install [CX File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer) from the Play Store
-2. Open CX File Explorer → tap **Network** (bottom bar) → **Remote Access**
-3. Tap **Start** — note the address shown (e.g. `http://192.168.x.x:8888`)
-4. The server runs while the app is open. For background operation, enable **Run in background** in the app's settings
+### ownCloud
+```
+https://your-owncloud.example.com/remote.php/dav/files/YOUR_USERNAME/
+```
 
-> The address shown is your LAN IP. When connecting from the *same device*, use `http://localhost:8888` instead.
+### Synology NAS
+Enable WebDAV in **Control Panel → File Services → WebDAV** then use:
+```
+https://your-nas-ip:5006/
+```
 
-### Alternative: HTTP File Server
+### QNAP NAS
+Enable in **App Center → WebDAV Server**, then:
+```
+https://your-nas-ip:8081/
+```
 
-1. Install [HTTP File Server](https://play.google.com/store/apps/details?id=io.rclone.android) (or any app that exposes WebDAV on localhost)
-2. Start the server and note the port
-
-### Alternative: Solid Explorer (has built-in WebDAV server plugin)
-
-Available via Solid Explorer's Plugin Store inside the app.
+### Any other WebDAV server
+Use the URL your server admin provides. It must start with `http://` or `https://`.
 
 ---
 
-## Step 2 — Install FolderBridge (beta)
+## Step 2 — Install FolderBridge
 
-Until v1.1.0 is in the Community Plugins directory, install via BRAT:
-
+### Via BRAT (until v1.1.0 is in the Community Plugins directory)
 1. Install **Obsidian42 - BRAT** from Community Plugins
 2. BRAT Settings → **Add Beta Plugin**
 3. Paste: `https://github.com/tescolopio/Obsidian_FolderBridge`
 4. Enable the plugin
 
+### Via Community Plugins (once approved)
+Settings → Community Plugins → Browse → search **Folder Bridge** → Install → Enable
+
 ---
 
-## Step 3 — Add a WebDAV mount in FolderBridge
+## Step 3 — Add a mount
 
 1. Open Obsidian → **Settings → FolderBridge**
 2. Tap **Add Mount**
@@ -59,57 +71,57 @@ Until v1.1.0 is in the Community Plugins directory, install via BRAT:
 
 | Field | Value |
 |-------|-------|
-| **Mount type** | WebDAV *(only option on mobile — automatically selected)* |
-| **WebDAV URL** | `http://localhost:8888/` *(adjust port to match your server app)* |
-| **Username** | Leave blank, or enter credentials if you set them in the server app |
-| **Password** | Same |
-| **Virtual path** | The folder name that will appear in your vault, e.g. `Android Files` |
+| **Mount type** | WebDAV *(automatically selected on mobile)* |
+| **WebDAV URL** | Your server URL from Step 1 |
+| **Username** | Your server username |
+| **Password** | Your server password |
+| **Virtual path** | Name for the folder in your vault, e.g. `Work Files` or `Nextcloud` |
 
 4. Tap **Save**
-5. The mount appears in your vault's file explorer under the virtual path you chose
+
+The folder appears in Obsidian's file explorer. Browse, open, edit, and create files — all changes write back to your server in real time.
 
 ---
 
-## Step 4 — Verify it works
+## Step 4 — Verify
 
-- Open the vault file explorer — you should see your virtual folder
-- Navigate into it — your Android Downloads (or whichever folder the server exposes) should be listed
-- Open a file — it reads directly from the WebDAV server
-- Create or edit a note — changes write back through the server to the real file
+- File explorer shows your virtual folder
+- Navigate into it — your server files are listed
+- Open a note — edits save back to the server
+- Create a new file — it appears on the server immediately
 
 ---
 
 ## Troubleshooting
 
-### Mount shows "Offline" or connection refused
-- Make sure the WebDAV server app is running (check its notification in the status bar)
-- Confirm the port number matches what the app shows
-- Try `http://127.0.0.1:PORT/` instead of `localhost` in case of DNS resolution issues
-- Some server apps require you to grant storage permission — check the app's own settings
+### Mount shows "Offline"
+- Check that your server is reachable (open the URL in a browser on the phone)
+- Confirm the URL ends with `/` — many WebDAV servers require a trailing slash
+- If using `https://`, make sure the certificate is valid (self-signed certs will be rejected)
+- Try `http://` if your server does not have TLS configured
+
+### Authentication errors
+- Double-check username and password
+- Nextcloud users: if you use two-factor authentication, generate an **App Password** in Nextcloud Settings → Security → Devices & sessions
 
 ### Files appear but images don't load
-- This is a known limitation when the server returns binary content without correct MIME types. Try a different server app, or check if the server app has a "serve static files" or "content type" setting.
+- Images in mounted folders are served as data: URIs — this works for files under the configured size cap (default 10 MB, adjustable in FolderBridge Settings → General → Image / PDF size cap)
+- Very large images won't embed — open them directly instead
 
-### Server stops when Obsidian is in the foreground
-- Android kills background apps aggressively. In your WebDAV server app, enable **"Keep running in background"** or add it to Android's battery optimization exclusion list:  
-  Settings → Battery → App battery usage → [Server app] → Unrestricted
-
-### I want to expose only a specific folder, not all storage
-- Most server apps let you choose the root directory. Set it to e.g. `/sdcard/Documents/MyProject/` so only that folder is accessible via WebDAV.
+### Slow performance on mobile
+- WebDAV over a slow mobile data connection will be slower than local files — this is expected
+- For large folders, consider mounting only a specific subdirectory rather than the server root
 
 ---
 
-## Server app comparison
+## Don't have a WebDAV server? (Power-user option)
 
-| App | Free | Background | Credentials | Root dir control |
-|-----|------|-----------|-------------|-----------------|
-| CX File Explorer | ✅ | ✅ (setting) | Optional | ✅ |
-| HTTP File Server | ✅ | ✅ | Optional | ✅ |
-| Solid Explorer | Paid | ✅ | Optional | ✅ |
-| WebDAV Server | ✅ | ✅ | Required | ✅ |
+If you want to access files that are **only on your Android device** (e.g. Downloads, DCIM), you can run a WebDAV server *on the phone itself* using a free app:
 
----
+1. Install [CX File Explorer](https://play.google.com/store/apps/details?id=com.cxinventor.file.explorer) from the Play Store
+2. Open CX File Explorer → tap **Network** → **Remote Access** → **Start**
+3. In FolderBridge, use `http://localhost:8888/` as the WebDAV URL (adjust port as shown in the app)
 
-## Security note
+Note: You need to keep the server app running in the background — Android may kill it to save battery. Enable "Run in background" in the app's settings and exclude it from battery optimisation.
 
-The WebDAV server is bound to `localhost` by default in most apps, meaning only apps on the same device can connect to it. If you configure it to bind to `0.0.0.0` (all interfaces), it becomes accessible on your local network — useful if you also want to connect from your PC, but be sure to set credentials.
+This works, but it is the harder path. If you just want to access files on your Nextcloud or NAS, you do not need any of this.
