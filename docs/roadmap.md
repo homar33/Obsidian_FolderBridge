@@ -2,7 +2,7 @@
 
 This document tracks the current status of platform support and planned features. It is updated with each release.
 
-**Current version: v2.0.0** — Last updated: 2026-02-25
+**Current version: v2.1.0** — Last updated: 2026-02-25
 
 ---
 
@@ -22,6 +22,7 @@ This document tracks the current status of platform support and planned features
 
 | Version | What shipped |
 |---------|-------------|
+| v2.1.0 | **Read-only mount graceful handling** — write operations through read-only mounts are now silently swallowed and surface a one-time `Notice` instead of throwing (fixes editor crash loop on auto-save). **VirtualAdapter vault name** — `getName()` now delegates to the underlying adapter instead of returning the hardcoded string `'VirtualAdapter'` (fixes vault name showing incorrectly in the lower-left UI). |
 | v2.0.0+ | **Official Obsidian community plugin directory** — listed in the Obsidian plugin browser; install directly via Settings → Community Plugins → Browse. |
 | v2.0.0 | **S3 / Backblaze B2 mounts** — mount any S3-compatible bucket (Amazon S3, Backblaze B2, MinIO, Cloudflare R2) as a virtual vault folder with quick-fill presets, OS-keychain-encrypted secret key, and correct ListObjectsV2 virtual-folder semantics. **SFTP mounts** — mount any remote SSH directory (password or private-key auth); persistent auto-reconnecting connection per mount; server-side atomic rename. Generalised `CredentialStore` with generic encrypt/decrypt helpers. Mobile UI shows WebDAV and S3/B2 only. Export/import strips all credential types. `SecurityManager` skips local-path checks for cloud mounts. |
 | v1.1.6 | Command palette integration — four commands: Add mount, Toggle mount on/off (fuzzy picker), Reconnect unreachable mounts, Open settings. All assignable to custom hotkeys. |

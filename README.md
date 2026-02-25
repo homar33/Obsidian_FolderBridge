@@ -11,10 +11,12 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
 - **Zero Duplication** — Files are read and written directly from their real locations
 - **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are encrypted with the **OS keychain** (Windows DPAPI / macOS Keychain / Linux libsecret) and persist across restarts; the encrypted blob is device-specific and safe to sync.
+- **S3 / Backblaze B2 Mounts** — Mount any S3-compatible bucket (Amazon S3, Backblaze B2, MinIO, Cloudflare R2) as a virtual vault folder. Quick-fill presets for common providers; secret keys encrypted with the OS keychain. Works on desktop and Android.
+- **SFTP Mounts** — Mount any remote SSH directory using password or private-key authentication. Persistent auto-reconnecting connection per mount; server-side atomic rename. Desktop only.
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. Per-mount entries for precise control, plus a **global ignore list** applied to every mount (pre-filled with `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`).
-- **Read-Only Mounts** — Protect external folders from accidental writes
+- **Read-Only Mounts** — Protect external folders from accidental writes. Write operations are silently swallowed and surface a one-time Notice so Obsidian's auto-save never enters an unrecoverable error loop.
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
 - **Dry-Run Mode** — Log all write operations to the console without executing them (safe for testing)
@@ -318,7 +320,7 @@ See [Ignore List](#ignore-list) in the Usage Guide above for full documentation.
 
 ### Mobile (iOS / Android)
 
-**Android** — WebDAV mounts are fully supported on Obsidian for Android (v1.1.0+). Connect to Nextcloud, ownCloud, a NAS, or any WebDAV server from your phone — no extra apps required. Local filesystem mounts are not available due to Android's app sandbox; only WebDAV mounts work. See the [Android Setup Guide](docs/ANDROID_SETUP.md) for step-by-step instructions.
+**Android** — WebDAV and S3/B2 mounts are fully supported on Obsidian for Android (v2.0.0+). Connect to Nextcloud, ownCloud, a NAS, any WebDAV server, or an S3-compatible bucket from your phone — no extra apps required. Local and SFTP mounts are not available on Android due to the app sandbox. See the [Android Setup Guide](docs/ANDROID_SETUP.md) for step-by-step instructions.
 
 **iOS** — Not yet tested. WebDAV may work in theory (same code paths as Android) but is not officially supported. Feedback welcome via [GitHub Issues](https://github.com/tescolopio/Obsidian_FolderBridge/issues).
 

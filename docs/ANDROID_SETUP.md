@@ -1,6 +1,6 @@
 # Android / Mobile Setup Guide
 
-Use FolderBridge on your Android phone to access files stored on your **Nextcloud, NAS, or any WebDAV server** — no computer required, no cable, no sync client.
+Use FolderBridge on your Android phone to access files stored on your **Nextcloud, NAS, WebDAV server, or S3-compatible bucket** — no computer required, no cable, no sync client.
 
 ---
 
@@ -52,14 +52,7 @@ Use the URL your server admin provides. It must start with `http://` or `https:/
 
 ## Step 2 — Install FolderBridge
 
-### Via BRAT (until v1.1.0 is in the Community Plugins directory)
-1. Install **Obsidian42 - BRAT** from Community Plugins
-2. BRAT Settings → **Add Beta Plugin**
-3. Paste: `https://github.com/tescolopio/Obsidian_FolderBridge`
-4. Enable the plugin
-
-### Via Community Plugins (once approved)
-Settings → Community Plugins → Browse → search **Folder Bridge** → Install → Enable
+Settings → **Community Plugins** → Browse → search **Folder Bridge** → Install → Enable
 
 ---
 
@@ -71,7 +64,7 @@ Settings → Community Plugins → Browse → search **Folder Bridge** → Insta
 
 | Field | Value |
 |-------|-------|
-| **Mount type** | WebDAV *(automatically selected on mobile)* |
+| **Mount type** | WebDAV or S3/Backblaze B2 *(the UI shows only mobile-compatible types)* |
 | **WebDAV URL** | Your server URL from Step 1 |
 | **Username** | Your server username |
 | **Password** | Your server password |
