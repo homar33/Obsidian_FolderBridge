@@ -22,6 +22,7 @@ This document tracks the current status of platform support and planned features
 
 | Version | What shipped |
 |---------|-------------|
+| v2.0.0+ | **Official Obsidian community plugin directory** — listed in the Obsidian plugin browser; install directly via Settings → Community Plugins → Browse. |
 | v2.0.0 | **S3 / Backblaze B2 mounts** — mount any S3-compatible bucket (Amazon S3, Backblaze B2, MinIO, Cloudflare R2) as a virtual vault folder with quick-fill presets, OS-keychain-encrypted secret key, and correct ListObjectsV2 virtual-folder semantics. **SFTP mounts** — mount any remote SSH directory (password or private-key auth); persistent auto-reconnecting connection per mount; server-side atomic rename. Generalised `CredentialStore` with generic encrypt/decrypt helpers. Mobile UI shows WebDAV and S3/B2 only. Export/import strips all credential types. `SecurityManager` skips local-path checks for cloud mounts. |
 | v1.1.6 | Command palette integration — four commands: Add mount, Toggle mount on/off (fuzzy picker), Reconnect unreachable mounts, Open settings. All assignable to custom hotkeys. |
 | v1.1.5 | First-run onboarding welcome modal — shown once to new users with no mounts configured; direct "Add my first mount →" action. |
@@ -48,7 +49,6 @@ This document tracks the current status of platform support and planned features
 ### High Priority
 
 - **macOS verified support** — POSIX code paths are implemented and believed to work; a confirmed macOS test pass + community feedback loop would let us mark it ✅ Stable
-- **Community plugin directory listing** — submit PR to `obsidianmd/obsidian-releases` for inclusion in the official plugin browser; currently installable via BRAT
 - **S3 / SFTP connection presets** — quick-fill dropdowns for common SFTP hosts and S3-compatible providers, matching the WebDAV preset UX
 
 ### Medium Priority

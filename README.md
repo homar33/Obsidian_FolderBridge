@@ -28,7 +28,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 | Windows | ✅ Tested | Full support — long paths, UNC, NTFS quirks all handled |
 | macOS | ⚠️ Untested | POSIX code paths are implemented; not yet officially tested. Community reports welcome. |
 | Linux | ✅ Tested | POSIX paths, works including WSL |
-| Android | ⚠️ Beta | WebDAV mounts — connect to Nextcloud, NAS, or any WebDAV server from your phone. See [Android Setup Guide](docs/ANDROID_SETUP.md) |
+| Android | ✅ Stable | WebDAV and S3/B2 mounts work fully. UI auto-adapts to show only mobile-compatible mount types. See [Android Setup Guide](docs/ANDROID_SETUP.md) |
 | iOS | ❌ Not supported | Not yet tested on iOS; WebDAV may work in theory |
 
 ---
@@ -43,7 +43,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 
 ### Using BRAT (Beta Reviewers Auto-update Tool)
 
-If you want to test the latest pre-release versions or if the plugin is not yet available in the community directory, you can install it using [BRAT](https://tfthacker.com/BRAT):
+To test the latest pre-release versions ahead of an official release, you can install via [BRAT](https://tfthacker.com/BRAT):
 
 1. Install the **Obsidian42 - BRAT** plugin from the Community Plugins directory.
 2. Enable BRAT in your settings.
@@ -86,7 +86,7 @@ Then in Obsidian: **Settings → Community Plugins → disable Safe Mode → ena
 ## Quick Start
 
 1. Click the **folder-plus** ribbon icon (or go to **Settings → Folder Bridge → Add Mount Point**)
-2. Select the **Mount Type** (Local folder, WebDAV server, or Another Obsidian vault)
+2. Select the **Mount Type** (Local folder, WebDAV, S3/Backblaze B2, SFTP, or Another Obsidian vault)
 3. Fill in the **Real path** and **Virtual path**, then click **Validate & Add**
 
 The folder appears immediately in Obsidian's file explorer — no restart needed.
