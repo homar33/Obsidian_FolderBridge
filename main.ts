@@ -3,7 +3,7 @@ import { FolderBridgeSettings, MountPoint, DEFAULT_SETTINGS } from './src/types'
 import { PathMapper } from './src/PathMapper';
 import { VirtualAdapter } from './src/VirtualAdapter';
 import { SecurityManager } from './src/SecurityManager';
-import { MountManagerModal, getMountStatus, browseFolderOnDisk, VaultFolderPickerModal } from './src/ui/MountManagerModal';
+import { MountManagerModal, getMountStatus, browseFolderOnDisk, browseMultipleFoldersOnDisk, VaultFolderPickerModal } from './src/ui/MountManagerModal';
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { WelcomeModal } from './src/ui/WelcomeModal';
 import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
@@ -1523,22 +1523,36 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 					inputEl.style.flexGrow = '1';
 
 					// Browse mount button — opens disk picker rooted at the mount's real path
+					// Multi-select: all chosen folders are added to the ignore list immediately.
 					const browseBtn = addContainer.createEl('button', { text: 'Browse…' });
+					browseBtn.setAttribute('title', 'Hold Ctrl / Cmd to select multiple folders');
 					browseBtn.onclick = async () => {
-						const selected = await browseFolderOnDisk(
-							`Select folder to ignore in "${selectedMount.label || selectedMount.virtualPath}"`,
+						const selections = await browseMultipleFoldersOnDisk(
+							`Select folder(s) to ignore in "${selectedMount.label || selectedMount.virtualPath}"`,
 							selectedMount.realPath,
 						);
-						if (selected) {
-							// Normalize to forward slashes and strip mount real-path prefix
-							const mountReal = selectedMount.realPath.replace(/\\/g, '/').replace(/\/$/, '');
+						if (!selections?.length) return;
+
+						const mountReal = selectedMount.realPath.replace(/\\/g, '/').replace(/\/$/, '');
+						if (!selectedMount.ignoreList) selectedMount.ignoreList = [];
+
+						let added = 0;
+						for (const selected of selections) {
 							const sel = selected.replace(/\\/g, '/').replace(/\/$/, '');
 							const relative = sel.startsWith(mountReal + '/')
 								? sel.slice(mountReal.length + 1)
 								: sel;
-							// Pre-fill the text input so the user can review/edit before adding
-							inputEl.value = relative;
-							inputEl.focus();
+							if (!selectedMount.ignoreList.includes(relative)) {
+								selectedMount.ignoreList.push(relative);
+								added++;
+							}
+						}
+
+						if (added > 0) {
+							await this.plugin.saveSettings();
+							await this.plugin.applyIgnoreListToVault(selectedMount);
+							renderIgnoreList();
+							new Notice(`Folder Bridge: Added ${added} item${added === 1 ? '' : 's'} to the ignore list.`);
 						}
 					};
 

@@ -48,6 +48,39 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 	}
 }
 
+/**
+ * Open the native OS folder-picker dialog with multi-selection enabled.
+ * Returns the array of selected absolute paths, or null if the user cancelled
+ * or the Electron remote API is unavailable.
+ */
+export async function browseMultipleFoldersOnDisk(title = 'Select Folders', defaultPath?: string): Promise<string[] | null> {
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const electron = (window as any).require?.('electron') ?? require('electron');
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
+		if (!dialog?.showOpenDialog) {
+			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+			return null;
+		}
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const options: any = {
+			properties: ['openDirectory', 'multiSelections'],
+			title,
+		};
+		if (defaultPath) {
+			options.defaultPath = defaultPath;
+		}
+		const result = await dialog.showOpenDialog(options);
+		if (result.canceled || !result.filePaths?.length) return null;
+		return result.filePaths as string[];
+	} catch (err) {
+		console.error('Folder Bridge: Electron dialog error', err);
+		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+		return null;
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Vault folder picker modal
 // ---------------------------------------------------------------------------
@@ -401,10 +434,10 @@ export class MountManagerModal extends Modal {
 		});
 
 		const S3_PRESETS: Record<string, { region: string; endpoint: string; forcePathStyle: boolean; note: string }> = {
-			aws:       { region: 'us-east-1', endpoint: '', forcePathStyle: false, note: 'Use an IAM user with S3 read/write permissions. Access Key ID + Secret Access Key.' },
-			b2:        { region: 'us-west-004', endpoint: 'https://s3.us-west-004.backblazeb2.com', forcePathStyle: true, note: 'Use a Backblaze Application Key with read/write access to your bucket. Set endpoint to your bucket region.' },
-			minio:     { region: 'us-east-1', endpoint: 'http://localhost:9000', forcePathStyle: true, note: 'Self-hosted MinIO. Path-style is required. Set endpoint to your MinIO URL.' },
-			cloudflare:{ region: 'auto', endpoint: 'https://<ACCOUNT_ID>.r2.cloudflarestorage.com', forcePathStyle: false, note: 'Cloudflare R2. Replace <ACCOUNT_ID> with your Cloudflare account ID.' },
+			aws: { region: 'us-east-1', endpoint: '', forcePathStyle: false, note: 'Use an IAM user with S3 read/write permissions. Access Key ID + Secret Access Key.' },
+			b2: { region: 'us-west-004', endpoint: 'https://s3.us-west-004.backblazeb2.com', forcePathStyle: true, note: 'Use a Backblaze Application Key with read/write access to your bucket. Set endpoint to your bucket region.' },
+			minio: { region: 'us-east-1', endpoint: 'http://localhost:9000', forcePathStyle: true, note: 'Self-hosted MinIO. Path-style is required. Set endpoint to your MinIO URL.' },
+			cloudflare: { region: 'auto', endpoint: 'https://<ACCOUNT_ID>.r2.cloudflarestorage.com', forcePathStyle: false, note: 'Cloudflare R2. Replace <ACCOUNT_ID> with your Cloudflare account ID.' },
 		};
 
 		let s3PresetNoteEl: HTMLParagraphElement | null = null;
