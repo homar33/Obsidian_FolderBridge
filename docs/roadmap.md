@@ -2,7 +2,7 @@
 
 This document tracks the current status of platform support and planned features. It is updated with each release.
 
-**Current version: v1.0.0** — Last updated: 2026-02-23
+**Current version: v2.0.0** — Last updated: 2026-02-25
 
 ---
 
@@ -13,32 +13,8 @@ This document tracks the current status of platform support and planned features
 | Windows | ✅ Stable | Full support — long paths, UNC, NTFS quirks, OneDrive Files On Demand |
 | Linux | ✅ Stable | POSIX paths, WSL cross-environment support |
 | macOS | ⚠️ Untested | POSIX code paths are fully implemented; no known blockers. Community testing welcomed — [open an issue](https://github.com/tescolopio/Obsidian_FolderBridge/issues) if you hit anything. |
-| iOS | ❌ Not feasible | Obsidian’s iOS sandbox prevents access to arbitrary filesystem paths. Not blocked on engineering — blocked by the OS. |
-| Android | ❌ Not feasible | Same sandbox restriction as iOS. |
-
----
-
-## Planned Features
-
-### High Priority
-
-- ✅ **Done** — Virtual Path Management & Drag-Drop Reorganization
-- ✅ **Done** — Edit mount in-place (v0.5.0)
-- ✅ **Done** — Drag-drop reordering of mounts in settings (v0.5.0)
-- ✅ **Done** — “Move mount to…” context menu (v0.5.0)
-
-### Medium Priority
-
-- ✅ **Done** — WebDAV support (Nextcloud, ownCloud, generic — v0.8.0)
-- ✅ **Done** — Improved conflict resolution UI: unreachable indicator, per-mount reconnect button (v0.6.0)
-- ✅ **Done** — Performance tuning: per-mount debounce, polling mode, max-files scan limit (v0.7.0)
-
-### Low Priority / Exploratory
-
-- ✅ **Done** — Per-mount sync settings — debounce, polling interval, ignore patterns per mount (v0.7.0)
-- ✅ **Done** — Vault-to-vault bridging: mount a folder from another Obsidian vault (v0.9.0)
-- **OAuth2-based Google Drive and OneDrive mounting** — requires local HTTP server for auth callback; out of scope for v1.0
-- **Read-only HTTP/S folder server** — serve a mounted folder as a local static file server; out of scope for v1.0
+| Android | ✅ Stable | WebDAV and S3/B2 mounts work fully on Obsidian Android. The UI automatically shows only mobile-compatible mount types. Local and SFTP mounts require the desktop Electron runtime and are hidden on mobile. |
+| iOS | ❌ Not feasible | Obsidian's iOS sandbox prevents access to arbitrary filesystem paths and blocks the Node.js networking stack. Not blocked on engineering — blocked by the OS. |
 
 ---
 
@@ -46,39 +22,24 @@ This document tracks the current status of platform support and planned features
 
 | Version | What shipped |
 |---------|-------------|
-| v1.0.0 | Final polish; README and roadmap updated to reflect all v0.x work; 1.0 release |
-| v0.9.0 | Vault-to-vault bridging: mount another vault’s folder with vault-aware ignore defaults (`.obsidian`, `.trash`, `.smart-connections`) |
-| v0.8.0 | WebDAV support (Nextcloud, ownCloud, generic); secure sessionStorage-only credential storage; WebDAV health checks; no file watcher for HTTP mounts |
-| v0.7.0 | Per-mount debounce threshold; per-mount polling mode; max-files scan limit; Advanced settings collapsible section in mount modal |
-| v0.6.0 | Conflict resolution UI: 30-second background health checks, orange status bar on unreachable mounts, per-mount reconnect button |
-| v0.5.0 | Edit mount in-place; drag-drop reorder in settings; “Move mount to…” context menu; Browse-to-ignore picker; path-relative ignore patterns; instant file-explorer refresh on ignore add; CI fixed (ESLint flat config + typescript-eslint v8) |
-| v0.4.4 | Platform support documentation; macOS marked untested (not unimplemented); mobile sandbox clarification |
-| v0.4.3 | Image/PDF rendering via `data:` URIs; rename race fix (2s poll); 300ms debounce for rapid saves; OneDrive cloud placeholder detection; PathMapper O(N) lookup cache |
-| v0.4.2 | FileWatcher hardening (symlink escape fix, event string, watcher restart, 20 unit tests); 0 npm audit vulnerabilities |
-| v0.4.1 | Resource URL encoding fix |
-| v0.4.0 | ENOENT error code fix for file creation; image path resolution |
-| v0.3.0 | WSL folder browser button |
-| v0.2.0 | Device-specific mount IDs, foreign mount toggle, path overrides, ignore list, context menu integration |
-| v0.1.0 | Initial release — virtual adapter, PathMapper, SecurityManager, Windows hardening, browse buttons, WSL hints |
-
----
-
-The roadmap evolves with community feedback and real-world usage patterns. To request a feature or report a platform-specific issue, open an issue on [GitHub](https://github.com/tescolopio/Obsidian_FolderBridge/issues).
-
-
----
-
-## Platform Status
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Windows | ✅ Stable | Full support — long paths, UNC, NTFS quirks, OneDrive Files On Demand |
-| Linux | ✅ Stable | POSIX paths, WSL cross-environment support |
-| macOS | ⚠️ Untested | POSIX code paths are fully implemented; no known blockers. Community testing welcomed — [open an issue](https://github.com/tescolopio/Obsidian_FolderBridge/issues) if you hit anything. |
-| iOS | ❌ Not feasible | Obsidian's iOS sandbox prevents access to arbitrary filesystem paths. Not blocked on engineering — blocked by the OS. |
-| Android | ❌ Not feasible | Same sandbox restriction as iOS. |
-
-> **Note on macOS FUSE / macfuse:** An earlier version of this roadmap proposed investigating FUSE-based mounts on macOS. This is no longer necessary — the plugin already works at the Node.js `fs` layer inside Electron/Obsidian Desktop, which runs the same code on all desktop platforms. No native binary or kernel extension is needed.
+| v2.0.0 | **S3 / Backblaze B2 mounts** — mount any S3-compatible bucket (Amazon S3, Backblaze B2, MinIO, Cloudflare R2) as a virtual vault folder with quick-fill presets, OS-keychain-encrypted secret key, and correct ListObjectsV2 virtual-folder semantics. **SFTP mounts** — mount any remote SSH directory (password or private-key auth); persistent auto-reconnecting connection per mount; server-side atomic rename. Generalised `CredentialStore` with generic encrypt/decrypt helpers. Mobile UI shows WebDAV and S3/B2 only. Export/import strips all credential types. `SecurityManager` skips local-path checks for cloud mounts. |
+| v1.1.6 | Command palette integration — four commands: Add mount, Toggle mount on/off (fuzzy picker), Reconnect unreachable mounts, Open settings. All assignable to custom hotkeys. |
+| v1.1.5 | First-run onboarding welcome modal — shown once to new users with no mounts configured; direct "Add my first mount →" action. |
+| v1.1.4 | Import / Export mount configuration — export strips credentials; import appends mounts with fresh IDs. |
+| v1.1.3 | WebDAV connection presets — quick-fill for Nextcloud, ownCloud, Synology NAS, QNAP NAS. |
+| v1.1.2 | Global ignore patterns — a single pattern list applied across every mount before per-mount rules. |
+| v1.1.1 | Persistent WebDAV credentials — OS keychain (DPAPI / macOS Keychain / libsecret) via Electron `safeStorage`; device-specific encrypted blob safe to sync; transparent session-memory fallback on mobile. |
+| v1.1.0 | Android / mobile support — WebDAV mounts work on Obsidian Android; UI auto-adapts to mobile-only mode. Configurable image/PDF data: URI size cap (setting). |
+| v1.0.0 | Stable release milestone; full README and documentation update. |
+| v0.9.0 | Vault-to-vault bridging — mount another vault's folder; auto-ignores `.obsidian`, `.trash`, `.smart-connections`. |
+| v0.8.0 | WebDAV support (Nextcloud, ownCloud, generic); health checks via HTTP `exists()` probe; no file watcher for HTTP mounts. |
+| v0.7.0 | Per-mount debounce threshold; per-mount polling mode; max-files scan limit; Advanced settings collapsible section. |
+| v0.6.0 | Conflict resolution UI — 30s background health checks, orange status bar on unreachable mounts, per-mount reconnect button. |
+| v0.5.0 | Edit mount in-place; drag-drop reorder in settings; "Move mount to…" context menu; Browse-to-ignore picker; path-relative ignore patterns; instant file-explorer refresh on ignore add. |
+| v0.4.3 | Image/PDF rendering via `data:` URIs; rename race fix; OneDrive cloud placeholder detection; PathMapper O(N) lookup cache. |
+| v0.4.2 | FileWatcher hardening — symlink escape fix, watcher restart, 20 unit tests. |
+| v0.2.0 | Device-specific mount IDs, foreign mount toggle, path overrides, ignore list, context menu integration. |
+| v0.1.0 | Initial release — VirtualAdapter, PathMapper, SecurityManager, Windows hardening, browse buttons, WSL hints. |
 
 ---
 
@@ -86,48 +47,23 @@ The roadmap evolves with community feedback and real-world usage patterns. To re
 
 ### High Priority
 
-- ~~**Virtual Path Management & Drag-Drop Reorganization**~~ ✅ **Done (unreleased)**
-  - ~~Edit or change the virtual path of an existing mount without deleting and recreating it~~ → **Edit button** pre-populates the full modal; vault tree + watcher update live
-  - ~~Drag-drop reordering of mounts in the settings UI~~ → **HTML5 drag-drop** on mount rows; persisted immediately
-  - ~~Drag-drop moving of mounts within the vault file explorer~~ → **"Move mount to…" context menu** on mount root folders; uses the vault folder picker
+- **macOS verified support** — POSIX code paths are implemented and believed to work; a confirmed macOS test pass + community feedback loop would let us mark it ✅ Stable
+- **Community plugin directory listing** — submit PR to `obsidianmd/obsidian-releases` for inclusion in the official plugin browser; currently installable via BRAT
+- **S3 / SFTP connection presets** — quick-fill dropdowns for common SFTP hosts and S3-compatible providers, matching the WebDAV preset UX
 
 ### Medium Priority
 
-- **Cloud provider shortcuts** (without requiring desktop sync apps)
-  - WebDAV support (Nextcloud, Nextcloud Talk, ownCloud, generic servers)
-  - OAuth2-based Google Drive and OneDrive mounting (requires local HTTP server for auth callback)
-  - NAS via SMB already works today via UNC paths (`\\server\share\...`) — file watching may not work on all servers
-  - See [comment thread discussion](https://github.com/tescolopio/Obsidian_FolderBridge/issues) for details on what's feasible
-
-- **Improved conflict resolution UI**
-  - Visual indicator when a mounted path becomes unreachable
-  - Per-mount reconnect / re-scan button without requiring a plugin reload
-
-- **Performance tuning for very large mounts**
-  - Lazy/paginated directory listing for folders with tens of thousands of files
-  - Optional file index cache with configurable staleness threshold
+- **OAuth2-based Google Drive mounting** — requires a local HTTP redirect server for the auth callback; scoped to a future release once the core mount types stabilise
+- **OneDrive OAuth2 mounting** — same auth-server requirement as Google Drive; UNC path workaround (`\\server\share`) works today for on-prem scenarios
+- **Lazy / paginated directory listing** — for mounts with tens of thousands of files; currently capped at 10 000 entries via a hard limit
+- **iOS feasibility re-evaluation** — track Obsidian's iOS plugin API changes; if Apple relaxes sandbox rules or Obsidian ships a network-mount abstraction, revisit
 
 ### Low Priority / Exploratory
 
-- **Per-mount sync settings** — control watcher polling interval, debounce threshold, and ignore patterns at the mount level rather than globally
-- **Vault-to-vault bridging** — mount a folder from another Obsidian vault (requires resolving metadata cache conflicts)
-- **Read-only HTTP/S folder** — serve a mounted folder as a local static file server for sharing
-
----
-
-## Recently Completed
-
-| Version | What shipped |
-|---------|-------------|
-| v0.5.0 | Edit mount in-place; drag-drop reorder in settings; "Move mount to…" context menu; Browse-to-ignore picker; path-relative ignore patterns; instant file-explorer refresh on ignore add; CI fixed (ESLint flat config + typescript-eslint v8) |
-| v0.4.4 | Platform support documentation; macOS marked untested (not unimplemented); mobile sandbox clarification |
-| v0.4.3 | Image/PDF rendering via `data:` URIs; rename race fix (2s poll); 300ms debounce for rapid saves; OneDrive cloud placeholder detection; PathMapper O(N) lookup cache |
-| v0.4.2 | FileWatcher hardening (symlink escape fix, event string, watcher restart, 20 unit tests); 0 npm audit vulnerabilities |
-| v0.4.1 | Resource URL encoding fix |
-| v0.4.0 | ENOENT error code fix for file creation; image path resolution |
-| v0.3.0 | WSL folder browser button |
-| v0.2.0 | Device-specific mount IDs, foreign mount toggle, path overrides, ignore list, context menu integration |
-| v0.1.0 | Initial release — virtual adapter, PathMapper, SecurityManager, Windows hardening, browse buttons, WSL hints |
+- **Read-only HTTP/S static server** — serve a mounted folder as a local file server for lightweight in-vault sharing
+- **Per-mount credential rotation UI** — re-enter or rotate credentials for a specific mount without removing and recreating it
+- **Mount health dashboard** — dedicated view showing uptime, last-seen, and error history per mount
+- **Encrypted local mounts** — transparent at-rest encryption layer for local folder mounts (research phase)
 
 ---
 
