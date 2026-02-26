@@ -1088,14 +1088,15 @@ export class VirtualAdapter {
 			const dstSFTP = dstMount ? this.getSFTP(dstMount) : null;
 
 			// Server-side copy when both ends are on the same WebDAV mount
-			if (srcWebDAV && dstWebDAV && srcMount!.id === dstMount!.id) {
-				await srcWebDAV.copy(this.toServerPath(normalizedPath, srcMount!), this.toServerPath(newNormalizedPath, dstMount!));
+			// (srcWebDAV truthy implies srcMount non-null; dstWebDAV implies dstMount non-null)
+			if (srcWebDAV && dstWebDAV && srcMount && dstMount && srcMount.id === dstMount.id) {
+				await srcWebDAV.copy(this.toServerPath(normalizedPath, srcMount), this.toServerPath(newNormalizedPath, dstMount));
 				return;
 			}
 
 			// Server-side copy for S3 same-bucket same-mount
-			if (srcS3 && dstS3 && srcMount!.id === dstMount!.id) {
-				await srcS3.copy(this.toServerPath(normalizedPath, srcMount!), this.toServerPath(newNormalizedPath, dstMount!));
+			if (srcS3 && dstS3 && srcMount && dstMount && srcMount.id === dstMount.id) {
+				await srcS3.copy(this.toServerPath(normalizedPath, srcMount), this.toServerPath(newNormalizedPath, dstMount));
 				return;
 			}
 
@@ -1104,12 +1105,12 @@ export class VirtualAdapter {
 
 			// Read from source
 			let content: Buffer;
-			if (srcWebDAV) {
-				content = Buffer.from(await srcWebDAV.readBinary(this.toServerPath(normalizedPath, srcMount!)));
-			} else if (srcS3) {
-				content = Buffer.from(await srcS3.readBinary(this.toServerPath(normalizedPath, srcMount!)));
-			} else if (srcSFTP) {
-				content = Buffer.from(await srcSFTP.readBinary(this.toServerPath(normalizedPath, srcMount!)));
+			if (srcWebDAV && srcMount) {
+				content = Buffer.from(await srcWebDAV.readBinary(this.toServerPath(normalizedPath, srcMount)));
+			} else if (srcS3 && srcMount) {
+				content = Buffer.from(await srcS3.readBinary(this.toServerPath(normalizedPath, srcMount)));
+			} else if (srcSFTP && srcMount) {
+				content = Buffer.from(await srcSFTP.readBinary(this.toServerPath(normalizedPath, srcMount)));
 			} else if (srcMount) {
 				content = await fs.promises.readFile(this.toReal(normalizedPath, srcMount));
 			} else {
@@ -1119,12 +1120,12 @@ export class VirtualAdapter {
 			const contentAB = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer;
 
 			// Write to destination
-			if (dstWebDAV) {
-				await dstWebDAV.writeBinary(this.toServerPath(newNormalizedPath, dstMount!), contentAB);
-			} else if (dstS3) {
-				await dstS3.writeBinary(this.toServerPath(newNormalizedPath, dstMount!), contentAB);
-			} else if (dstSFTP) {
-				await dstSFTP.writeBinary(this.toServerPath(newNormalizedPath, dstMount!), contentAB);
+			if (dstWebDAV && dstMount) {
+				await dstWebDAV.writeBinary(this.toServerPath(newNormalizedPath, dstMount), contentAB);
+			} else if (dstS3 && dstMount) {
+				await dstS3.writeBinary(this.toServerPath(newNormalizedPath, dstMount), contentAB);
+			} else if (dstSFTP && dstMount) {
+				await dstSFTP.writeBinary(this.toServerPath(newNormalizedPath, dstMount), contentAB);
 			} else if (dstMount) {
 				const dstReal = this.toReal(newNormalizedPath, dstMount);
 				this.assertAllowed(dstReal);

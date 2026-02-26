@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-02-26
+
+### Changed
+- **Static analysis hardening** — eliminated all non-null assertions (`!`) in the cross-mount `copy()` method of `VirtualAdapter`. Each cloud adapter lookup is now paired with an explicit `&& srcMount`/`&& dstMount` guard so TypeScript can narrow the type without relying on runtime assumptions. Behaviour is identical; no logic changed.
+
 ## [2.4.0] - 2026-02-26
 
 ### Fixed
