@@ -16,7 +16,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. Per-mount entries for precise control, plus a **global ignore list** applied to every mount (pre-filled with `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`).
-- **Read-Only Mounts** — Protect external folders from accidental writes. Write operations are silently swallowed and surface a one-time Notice so Obsidian's auto-save never enters an unrecoverable error loop.
+- **Read-Only Mounts** — Protect external folders from accidental writes. Write operations are silently swallowed and surface a one-time Notice so Obsidian's auto-save never enters an unrecoverable error loop. Toggle read-only on any mount instantly from the Settings row or via a hotkey-assignable command — no need to open the edit modal.
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
 - **Dry-Run Mode** — Log all write operations to the console without executing them (safe for testing)
@@ -195,9 +195,12 @@ You can change a mount's virtual path directly from Obsidian's file explorer wit
 
 Prevent any write operations through a specific mount (useful for reference folders or shared network drives you don't own).
 
-- Enable the **Read-only** toggle when adding or editing a mount
-- Obsidian will still be able to open, search, and read all files in the mount
-- Any attempt to create, edit, rename, or delete a file through the mount will be blocked with a clear error
+- Enable the **Read-only** toggle when adding or editing a mount, or click the **lock icon** directly on any mount row in Settings
+- The lock icon turns amber when a mount is read-only so you can see its state at a glance without opening the edit modal
+- Toggle all mounts at once with the **Folder Bridge: Toggle read-only on all mounts** command (assignable to a hotkey)
+- Toggle a single mount by name with the **Folder Bridge: Toggle read-only on a specific mount…** command (assignable to a hotkey)
+- Obsidian can still open, search, and read all files in the mount
+- Any attempt to create, edit, rename, or delete a file through the mount is silently blocked with a one-time Notice
 
 ---
 
