@@ -5,6 +5,7 @@ import { MountPoint } from './types';
 import { WebDAVAdapter } from './WebDAVAdapter';
 import { S3Adapter } from './S3Adapter';
 import { SFTPAdapter } from './SFTPAdapter';
+import { FileServer, STREAMING_MIME } from './FileServer';
 import {
 	realPathToResourceUrl,
 	tryReadAsDataUri,
@@ -12,6 +13,7 @@ import {
 	isReservedWindowsFilename,
 	translateFsError,
 	isCloudPlaceholder,
+	EMBEDDABLE_MIME,
 } from './OSHelpers';
 
 // Lazy-loaded Node.js builtins — wrapped in try/catch so the bundle loads on
@@ -52,6 +54,8 @@ export class VirtualAdapter {
 	private maxDataUriBytes: number;
 	/** Mount IDs that have already shown a read-only notice this session (one-time per mount). */
 	private readOnlyNoticedMounts: Set<string> = new Set();
+	/** Optional localhost HTTP server for streaming video/audio from local mounts. */
+	private fileServer: FileServer | null = null;
 
 	constructor(
 		original: unknown,
@@ -71,6 +75,11 @@ export class VirtualAdapter {
 		this.onMountRootDelete = onMountRootDelete;
 		this.onMountRootMove = onMountRootMove;
 		this.isIgnored = isIgnored;
+	}
+
+	/** Register the FileServer instance so getResourcePath can use it for video/audio. */
+	setFileServer(server: FileServer): void {
+		this.fileServer = server;
 	}
 
 	/** Register (or replace) the WebDAV client for a mount. */
@@ -705,9 +714,53 @@ export class VirtualAdapter {
 			// external mounts must be served as data: URIs instead.
 			// The size cap is configurable via plugin settings (maxDataUriMB).
 			const realPath = this.pathMapper.toRealPath(normalizedPath, mount);
-			return tryReadAsDataUri(realPath, this.maxDataUriBytes) ?? realPathToResourceUrl(realPath);
+			return this.resolveResourceUrl(realPath);
 		}
 		return this.orig().getResourcePath(normalizedPath);
+	}
+
+	/**
+	 * Select the best URL strategy for a real file path:
+	 *
+	 *   1. Streaming types (video / audio, any size)
+	 *        → localhost FileServer  (only option with range-request support)
+	 *        → app://local/ if FileServer is not running (mobile / startup race)
+	 *
+	 *   2. Embeddable types (images, PDF)
+	 *      a. File ≤ maxDataUriMB → data: URI  (fast, no extra latency, always works)
+	 *      b. File > maxDataUriMB → FileServer  (avoids broken app://local/ in modern Obsidian)
+	 *      c. FileServer also not running → app://local/  (last-resort legacy fallback)
+	 *
+	 *   3. Unknown / non-media extension → app://local/
+	 */
+	resolveResourceUrl(realPath: string): string {
+		if (!path) return realPathToResourceUrl(realPath); // mobile — no ext parsing
+
+		const ext = path.extname(realPath).toLowerCase();
+
+		// ── 1. Streaming types (video / audio) ──────────────────────────────────
+		if (ext in STREAMING_MIME) {
+			if (this.fileServer?.isRunning) return this.fileServer.getFileUrl(realPath);
+			// FileServer not yet started (or mobile): fall back to app://local/
+			// Note: seeking/scrubbing won't work without range support but at least
+			// short clips may play through.
+			return realPathToResourceUrl(realPath);
+		}
+
+		// ── 2. Embeddable types (images, PDF) ──────────────────────────────
+		if (ext in EMBEDDABLE_MIME) {
+			// Try data: URI first — cheapest path for reasonably sized files.
+			const dataUri = tryReadAsDataUri(realPath, this.maxDataUriBytes);
+			if (dataUri) return dataUri;
+			// File exceeded the data-URI cap.  Route through FileServer so the
+			// image/PDF loads properly instead of getting ERR_FILE_NOT_FOUND.
+			if (this.fileServer?.isRunning) return this.fileServer.getFileUrl(realPath);
+			// Last resort: app://local/ (may fail in modern Obsidian builds).
+			return realPathToResourceUrl(realPath);
+		}
+
+		// ── 3. Non-media / unknown extension ────────────────────────────────
+		return realPathToResourceUrl(realPath);
 	}
 
 	// ------------------------------------------------------------------

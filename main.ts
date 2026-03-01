@@ -7,6 +7,7 @@ import { MountManagerModal, getMountStatus, browseFolderOnDisk, browseMultipleFo
 import { MountRootDeleteModal } from './src/ui/MountRootDeleteModal';
 import { WelcomeModal } from './src/ui/WelcomeModal';
 import { getPlatform, realPathToResourceUrl, tryReadAsDataUri } from './src/OSHelpers';
+import { FileServer } from './src/FileServer';
 import {
 	encryptCredential, decryptCredential,
 	saveSessionCredential, clearSessionCredential,
@@ -39,6 +40,8 @@ export default class FolderBridgePlugin extends Plugin {
 	security: SecurityManager;
 	virtualAdapter: VirtualAdapter | null = null;
 	fileWatcher: FileWatcher | null = null;
+	/** Localhost HTTP server — streams video/audio from local mounts with range-request support. */
+	fileServer: FileServer = new FileServer();
 
 	// Preserve original adapter so we can restore it on unload
 	private originalAdapter: unknown = null;
@@ -47,6 +50,8 @@ export default class FolderBridgePlugin extends Plugin {
 	// Preserve original vault.create / vault.createBinary so we can restore on unload
 	private originalVaultCreate: unknown = null;
 	private originalVaultCreateBinary: unknown = null;
+	// Preserve original app.openWithDefaultApp so we can restore it on unload
+	private originalOpenWithDefaultApp: unknown = null;
 	statusBarItem: HTMLElement | null = null;
 
 	/** Tracks reachability per mount.id; populated by the 30-second health-check loop. */
@@ -65,6 +70,21 @@ export default class FolderBridgePlugin extends Plugin {
 
 		// Install the virtual adapter shim
 		this.installVirtualAdapter();
+
+		// Start the localhost streaming server for video/audio in local mounts.
+		// Runs on a random available port; bound to 127.0.0.1 only.
+		this.fileServer.start().then(started => {
+			if (!started) return; // mobile — unavailable
+			// Register all currently active local mounts
+			for (const m of this.settings.mountPoints) {
+				if (m.enabled && m.realPath && !['webdav', 's3', 'sftp'].includes(m.mountType ?? '')) {
+					this.fileServer.addAllowedPath(m.realPath);
+				}
+			}
+			this.virtualAdapter?.setFileServer(this.fileServer);
+		}).catch(err => {
+			console.warn('[FolderBridge] FileServer failed to start (video streaming unavailable):', err);
+		});
 
 		// Ribbon icon opens the add-mount modal
 		const ribbonIconEl = this.addRibbonIcon('folder-plus', 'Folder Bridge: Add Mount', () => {
@@ -389,6 +409,17 @@ export default class FolderBridgePlugin extends Plugin {
 			(this.app.vault as any).createBinary = this.originalVaultCreateBinary;
 			this.originalVaultCreateBinary = null;
 		}
+
+		// Restore the original app.openWithDefaultApp
+		if (this.originalOpenWithDefaultApp) {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			(this.app as any).openWithDefaultApp = this.originalOpenWithDefaultApp;
+			this.originalOpenWithDefaultApp = null;
+		}
+
+		// Stop the localhost streaming server
+		this.fileServer.stop();
+
 		console.log('FolderBridge unloaded');
 	}
 
@@ -565,9 +596,12 @@ export default class FolderBridgePlugin extends Plugin {
 				const realPath = pathMapper.toRealPath(file.path, mount);
 				// Modern Obsidian uses app://<vaultId>/ which is restricted to
 				// vault-relative paths — external mounts get ERR_FILE_NOT_FOUND.
-				// Serve supported binary assets (images, PDFs) as data: URIs instead.
-				// For large or unsupported files fall back to app://local/ (legacy).
-				return tryReadAsDataUri(realPath, (this.settings.maxDataUriMB ?? 10) * 1024 * 1024) ?? realPathToResourceUrl(realPath);
+				// For video/audio: stream via localhost FileServer (supports range requests).
+				// For images/PDFs: serve as data: URI (no range needed).
+				// For everything else: fall back to app://local/ (legacy).
+				return this.virtualAdapter?.resolveResourceUrl(realPath)
+					?? tryReadAsDataUri(realPath, (this.settings.maxDataUriMB ?? 10) * 1024 * 1024)
+					?? realPathToResourceUrl(realPath);
 			}
 			// Fallback to original vault method for non-mounted files
 			if (typeof this.originalVaultGetResourcePath === 'function') {
@@ -575,6 +609,39 @@ export default class FolderBridgePlugin extends Plugin {
 				return (this.originalVaultGetResourcePath as any)(file);
 			}
 			return '';
+		};
+
+		// Patch app.openWithDefaultApp() to use the real filesystem path for
+		// mounted files.  Without this, Obsidian constructs a path relative to
+		// the vault root which doesn't exist on disk for external mounts, so the
+		// "Open with default application" context-menu action silently does nothing.
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const appAny = this.app as any;
+		this.originalOpenWithDefaultApp = appAny.openWithDefaultApp?.bind(this.app);
+		appAny.openWithDefaultApp = (filePath: string): void => {
+			const nPath = normalizePath(filePath);
+			const mount = pathMapper.getMountForPath(nPath);
+			if (mount && !['webdav', 's3', 'sftp'].includes(mount.mountType ?? '')) {
+				// Local mount: pass the real OS path directly to the shell
+				const realPath = pathMapper.toRealPath(nPath, mount);
+				try {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const electron = (require as any)('electron');
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const shellApi = (electron?.shell ?? (electron?.default as any)?.shell) as { openPath: (p: string) => Promise<string> } | undefined;
+					shellApi?.openPath(realPath).catch((e: unknown) => {
+						console.warn('[FolderBridge] openWithDefaultApp shell.openPath failed:', e);
+					});
+				} catch (e) {
+					console.warn('[FolderBridge] openWithDefaultApp: electron not available', e);
+				}
+				return;
+			}
+			// Non-mounted or cloud file: fall through to original
+			if (typeof this.originalOpenWithDefaultApp === 'function') {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				(this.originalOpenWithDefaultApp as any)(filePath);
+			}
 		};
 
 		// Patch vault.create() and vault.createBinary() for virtual mount paths.
@@ -765,6 +832,10 @@ export default class FolderBridgePlugin extends Plugin {
 		await this.saveSettings();
 		this.pathMapper.update(this.settings.mountPoints, this.settings.deviceId);
 		this.updateStatusBar();
+
+		// Register the mount's real path with the streaming server (local mounts only)
+		if (!isCloud && mount.realPath) this.fileServer.addAllowedPath(mount.realPath);
+
 		await this.notifyVaultMountAdded(mount);
 
 		let mountLabel: string;
@@ -796,6 +867,8 @@ export default class FolderBridgePlugin extends Plugin {
 		if (!stillUsed) {
 			this.settings.allowlist = this.settings.allowlist.filter(p => p !== mount.realPath);
 			this.security.revoke(mount.realPath);
+			// Revoke streaming-server access for this real path
+			if (mount.realPath) this.fileServer.removeAllowedPath(mount.realPath);
 		}
 
 		// Tear down adapters and clear stored credentials

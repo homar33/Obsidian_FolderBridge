@@ -18,6 +18,19 @@ export interface MountPoint {
 	watcherDebounceMs?: number;       // Debounce threshold for change events (default 300 ms)
 	watcherUsePolling?: boolean;      // Use polling instead of native fs events (for NAS/network drives)
 	watcherPollingIntervalMs?: number; // Polling interval in ms (default 2000; only used when usePolling)
+	/**
+	 * Controls which file types emit a `file-created` vault event when the
+	 * file watcher detects a new file in this mount.
+	 *
+	 * - `'all'`            (default) — all new files are announced to Obsidian.
+	 * - `'markdown-only'` — only `.md` / `.canvas` files trigger a vault
+	 *   `file-created` event; new images, PDFs, videos, etc. will appear
+	 *   after the next manual refresh but will NOT immediately fire
+	 *   `vault.on('create', …)`.  Use this on vault mounts to prevent
+	 *   third-party attachment-rename plugins from renaming binary files
+	 *   they didn't originally manage.
+	 */
+	watcherCreateFilter?: 'all' | 'markdown-only';
 	maxFiles?: number;                // Cap initial scan at this many files (0 = unlimited)
 	// Mount type (defaults to 'local' when absent)
 	mountType?: MountType;

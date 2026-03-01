@@ -5,6 +5,9 @@ import { App, normalizePath, Platform } from 'obsidian';
 import { MountPoint } from './types';
 import { PathMapper } from './PathMapper';
 
+/** Markdown-ish extensions that should always fire vault events, even under 'markdown-only' filter. */
+const MARKDOWN_EXTENSIONS = new Set(['.md', '.canvas', '.mdx']);
+
 export class FileWatcher {
     private app: App;
     private pathMapper: PathMapper;
@@ -172,8 +175,23 @@ export class FileWatcher {
         const vault = this.app.vault as any;
         if (typeof vault.onChange !== 'function') return;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const path = (require as any)('path') as typeof import('path');
         const virtualPath = this.pathMapper.toVirtualPath(realPath, mount);
         const normalizedPath = normalizePath(virtualPath);
+
+        // Bug fix: when watcherCreateFilter === 'markdown-only', suppress vault
+        // file-created events for binary files (images, PDFs, videos, etc.).
+        // This prevents third-party attachment-rename plugins from treating
+        // externally created files in the mount as new "active-note attachments"
+        // and silently renaming them to match the currently open note.
+        if (eventType === 'file-created' && mount.watcherCreateFilter === 'markdown-only') {
+            const ext = path.extname(normalizedPath).toLowerCase();
+            if (!MARKDOWN_EXTENSIONS.has(ext)) {
+                console.debug(`[FolderBridge] watcherCreateFilter=markdown-only: suppressed file-created for ${normalizedPath}`);
+                return;
+            }
+        }
 
         try {
             const existsInVault = !!this.app.vault.getAbstractFileByPath(normalizedPath);

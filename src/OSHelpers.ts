@@ -185,14 +185,57 @@ export function realPathToResourceUrl(realPath: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Data-URI image serving
+// Media MIME tables  (single source of truth — imported by FileServer too)
 // ---------------------------------------------------------------------------
 
 /**
- * MIME types for file extensions that we can serve as data: URIs.
- * Only binary formats that Obsidian's renderer (and PDF.js) can display inline.
+ * MIME types for formats that MUST be streamed via the localhost FileServer
+ * (HTML5 <video>/<audio> require byte-range / Accept-Ranges support).
+ *
+ * Covers every format listed in Obsidian's official supported-file-types doc
+ * plus common extras.  Keeping this exported so FileServer.ts can import it
+ * and avoid a second, independently-maintained copy.
  */
-const DATA_URI_MIME: Record<string, string> = {
+export const STREAMING_MIME: Record<string, string> = {
+	// ── Video ──────────────────────────────────────────────────────────────
+	'.mp4': 'video/mp4',
+	'.m4v': 'video/mp4',
+	'.webm': 'video/webm',
+	'.ogv': 'video/ogg',
+	'.mov': 'video/quicktime',
+	'.avi': 'video/x-msvideo',
+	'.mkv': 'video/x-matroska',
+	'.wmv': 'video/x-ms-wmv',
+	'.flv': 'video/x-flv',
+	// ── Audio ──────────────────────────────────────────────────────────────
+	'.mp3': 'audio/mpeg',
+	'.m4a': 'audio/mp4',
+	'.wav': 'audio/wav',
+	'.ogg': 'audio/ogg',
+	'.oga': 'audio/ogg',
+	'.flac': 'audio/flac',
+	'.aac': 'audio/aac',
+	'.opus': 'audio/ogg; codecs=opus',
+	'.weba': 'audio/webm',           // WebM audio (Obsidian-supported)
+	'.3gp': 'audio/3gpp',           // 3GPP audio/video (Obsidian-supported)
+	'.3g2': 'audio/3gpp2',          // 3GPP2 audio/video
+};
+
+/**
+ * Derived set of extensions that must not be served as data: URIs and must
+ * instead go through the range-capable FileServer.
+ */
+export const STREAMING_EXTENSIONS: ReadonlySet<string> = new Set(Object.keys(STREAMING_MIME));
+
+/**
+ * MIME types for embeddable formats (images, PDF) that are small enough to
+ * serve as data: URIs and displayed directly by Obsidian's renderer / PDF.js.
+ *
+ * Exported so FileServer can re-use the same map when it needs to serve a
+ * large image or PDF that exceeded the data-URI byte cap.
+ */
+export const EMBEDDABLE_MIME: Record<string, string> = {
+	// ── Images ─────────────────────────────────────────────────────────────
 	'.png': 'image/png',
 	'.jpg': 'image/jpeg',
 	'.jpeg': 'image/jpeg',
@@ -204,8 +247,22 @@ const DATA_URI_MIME: Record<string, string> = {
 	'.avif': 'image/avif',
 	'.tiff': 'image/tiff',
 	'.tif': 'image/tiff',
+	// ── Document ───────────────────────────────────────────────────────────
 	'.pdf': 'application/pdf',
 };
+
+/**
+ * Union of STREAMING_MIME and EMBEDDABLE_MIME — every extension the plugin
+ * should resolve to a working URL rather than falling through to app://local/.
+ */
+export const ALL_MEDIA_MIME: Record<string, string> = {
+	...STREAMING_MIME,
+	...EMBEDDABLE_MIME,
+};
+
+// Internal alias kept for tryReadAsDataUri (must not be exported to avoid
+// callers accidentally using it instead of ALL_MEDIA_MIME).
+const DATA_URI_MIME = EMBEDDABLE_MIME;
 
 /** Default maximum file size that we will read synchronously to produce a data: URI. */
 const MAX_SYNC_DATA_URI_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -231,7 +288,9 @@ export function tryReadAsDataUri(realPath: string, maxBytes = MAX_SYNC_DATA_URI_
 	// Node.js APIs unavailable on mobile — all local file reads return null.
 	if (!fs || !path) return null;
 	const ext = path.extname(realPath).toLowerCase();
-	const mime = DATA_URI_MIME[ext];
+	// Video/audio files must stream via FileServer — never serve them as data URIs.
+	if (STREAMING_EXTENSIONS.has(ext)) return null;
+	const mime = DATA_URI_MIME[ext]; // DATA_URI_MIME === EMBEDDABLE_MIME
 	if (!mime) return null;
 	try {
 		const stat = fs.statSync(realPath);

@@ -194,6 +194,7 @@ export class MountManagerModal extends Modal {
 	private watcherDebounceMs: number | undefined = undefined;
 	private watcherUsePolling = false;
 	private watcherPollingIntervalMs: number | undefined = undefined;
+	private watcherCreateFilter: 'all' | 'markdown-only' = 'all';
 	private maxFiles: number | undefined = undefined;
 
 	// ── Component references for programmatic updates ────────────────────────
@@ -234,6 +235,7 @@ export class MountManagerModal extends Modal {
 			this.watcherDebounceMs = editMount.watcherDebounceMs;
 			this.watcherUsePolling = editMount.watcherUsePolling ?? false;
 			this.watcherPollingIntervalMs = editMount.watcherPollingIntervalMs;
+			this.watcherCreateFilter = editMount.watcherCreateFilter ?? 'all';
 			this.maxFiles = editMount.maxFiles;
 		}
 	}
@@ -869,6 +871,20 @@ export class MountManagerModal extends Modal {
 		showHidePollingInterval(this.watcherUsePolling);
 
 		new Setting(advancedContainer)
+			.setName('New file events')
+			.setDesc(
+				'Controls which new files the watcher announces to Obsidian. ' +
+				'"Markdown only" prevents automatic-attachment-rename plugins from ' +
+				'renaming images or PDFs that were created by another app inside this ' +
+				'mount. New non-markdown files will still appear after a manual refresh.'
+			)
+			.addDropdown(drop => drop
+				.addOption('all', 'All file types (default)')
+				.addOption('markdown-only', 'Markdown only (prevents auto-rename)')
+				.setValue(this.watcherCreateFilter)
+				.onChange((val) => { this.watcherCreateFilter = val as 'all' | 'markdown-only'; }));
+
+		new Setting(advancedContainer)
 			.setName('Max files (scan limit)')
 			.setDesc('Stop the initial vault scan after this many items. Leave blank for unlimited. Use this to keep Obsidian responsive with very large mounts.')
 			.addText(text => {
@@ -1133,6 +1149,7 @@ export class MountManagerModal extends Modal {
 				watcherDebounceMs: this.watcherDebounceMs,
 				watcherUsePolling: this.watcherUsePolling || undefined,
 				watcherPollingIntervalMs: this.watcherUsePolling ? this.watcherPollingIntervalMs : undefined,
+				watcherCreateFilter: this.watcherCreateFilter !== 'all' ? this.watcherCreateFilter : undefined,
 				maxFiles: this.maxFiles,
 			},
 			this.editMount?.id,

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-03-01
+
+### Fixed
+- **Phantom file renames on vault mounts** — when the file watcher detected a new file created inside a mounted folder by an external process (e.g. a second Obsidian instance writing an attachment), it fired `vault.on('create', file)`. Third-party attachment-rename plugins (e.g. "Custom Attachment Location") reacted by immediately renaming the file to match the currently active note, producing dozens of spurious renames for PDF/PNG/JPG files the plugin never managed. A new per-mount option **"New file events"** (`watcherCreateFilter`) has been added under Advanced settings. Setting it to **"Markdown only"** suppresses `file-created` vault events for all non-markdown binary files, preventing any attachment-rename plugin from acting on them while still surfacing new `.md` / `.canvas` files immediately.
+- **MP4 and other video/audio files not playing in mounted folders** — Obsidian's built-in `<video>` player requires HTTP byte-range (`Accept-Ranges`) support for buffering and seeking. The `app://local/` fallback URL used for external mounts provides no range support, so the player showed controls but the video never loaded. The plugin now starts a minimal localhost HTTP server (bound to `127.0.0.1`, random port, per-session token) that serves all media files with full `206 Partial Content` / range support. All video and audio formats in Obsidian's supported-file-types list work correctly, including scrubbing.
+- **"Open with default application" silently doing nothing for mounted files** — Obsidian's internal handler constructed the OS path from `<vault root> + <virtual path>`, which does not exist on disk for external mounts. The plugin now intercepts this call and passes the real filesystem path directly to `shell.openPath()`, so the correct system application opens.
+- **Large images and PDFs broken in modern Obsidian** — files exceeding the `maxDataUriMB` cap previously fell through to `app://local/`, which is restricted to vault-relative paths in modern Obsidian builds and returns `ERR_FILE_NOT_FOUND` for external mounts. These files are now served via the same localhost FileServer as video/audio.
+
+### Added
+- **Per-mount "New file events" setting** (`watcherCreateFilter`) — dropdown in Advanced settings with two options: "All file types" (default, preserves existing behaviour) and "Markdown only" (suppresses `file-created` vault events for non-markdown binary files). Recommended for vault-type mounts shared with another active Obsidian instance.
+- **`FileServer`** — internal localhost HTTP server for streaming media from local mounts. Supports full byte-range requests, CORS headers, and a per-session security token. Covers all Obsidian-supported video/audio extensions including `.mp4`, `.m4v`, `.webm`, `.mkv`, `.mov`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.opus`, `.weba`, `.3gp`, `.3g2`, and more.
+
 ## [2.4.1] - 2026-02-26
 
 ### Changed
