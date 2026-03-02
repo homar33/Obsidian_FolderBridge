@@ -583,6 +583,17 @@ export default class FolderBridgePlugin extends Plugin {
 				}
 				return undefined;
 			},
+			// Present the original adapter's prototype to satisfy Obsidian's internal
+			// `instanceof FileSystemAdapter` guards.  Several desktop-only paths —
+			// most visibly the CSS Snippets "open folder" button in Appearance settings
+			// — bail out silently when this check fails.  Because our proxy wraps the
+			// original FileSystemAdapter and fully delegates all unimplemented methods
+			// back to it, reporting its prototype is semantically accurate.
+			getPrototypeOf(target) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const orig = (target as any).orig?.();
+				return orig ? Object.getPrototypeOf(orig) : Object.getPrototypeOf(target);
+			},
 		});
 
 		// Obsidian's renderer calls Vault.getResourcePath(TFile) directly — it does NOT

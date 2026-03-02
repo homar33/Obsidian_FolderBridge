@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.3] - 2026-03-02
+
+### Fixed
+- **CSS Snippets "open folder" button does nothing with Folder Bridge enabled** — Obsidian guards several desktop-only operations with an `instanceof FileSystemAdapter` check (also visible in Obsidian's internal `vault.onChange` handler as `this.adapter instanceof wu`).  Because the plugin replaces `vault.adapter` with a Proxy wrapping `VirtualAdapter`, that check was failing silently, preventing the Appearance → CSS Snippets folder icon from opening the OS file manager.  The Proxy now implements a `getPrototypeOf` trap that returns the original `FileSystemAdapter`'s prototype, so all `instanceof` checks pass correctly while the full virtual-mount behaviour is preserved.
+
 ## [2.4.2] - 2026-03-01
 
 ### Fixed
