@@ -800,7 +800,7 @@ export class MountManagerModal extends Modal {
 		const details = contentEl.createEl('details', { cls: 'folderbridge-advanced' });
 		// File-watcher settings are desktop-only; hide the entire Advanced section on mobile.
 		if (isMobile) details.addClass('folderbridge-hidden');
-		const summary = details.createEl('summary', { text: 'Advanced settings' });
+		details.createEl('summary', { text: 'Advanced settings' });
 
 		const advancedContainer = details.createDiv();
 

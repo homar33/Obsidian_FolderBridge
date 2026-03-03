@@ -330,7 +330,6 @@ export default class FolderBridgePlugin extends Plugin {
 								new Notice(`Folder Bridge: Added "${file.name}" to ignore list for mount "${mount.virtualPath}".`);
 
 								// Remove it from the vault view immediately
-								// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 								const vault = this.app.vault as any;
 								if (typeof vault.onChange === 'function') {
 									try {
@@ -1114,7 +1113,6 @@ export default class FolderBridgePlugin extends Plugin {
 	 * as a folder and inserts it into its internal TFolder tree.
 	 */
 	async notifyVaultMountAdded(mount: MountPoint): Promise<void> {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 
 		if (typeof vault.onChange !== 'function') {
@@ -1241,7 +1239,6 @@ export default class FolderBridgePlugin extends Plugin {
 			const fileExplorerLeaves = this.app.workspace.getLeavesOfType('file-explorer');
 			if (fileExplorerLeaves.length === 0) return;
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any -- file explorer view internals are not in public typings
 			const fileExplorerView = fileExplorerLeaves[0].view as any;
 			const fileItems = fileExplorerView.fileItems as Record<string, { setCollapsed?: (collapsed: boolean) => void }>;
 
@@ -1270,7 +1267,6 @@ export default class FolderBridgePlugin extends Plugin {
 		// [FEATURE_20260222] Stop watching the mount for external changes
 		this.fileWatcher?.stopWatching(mount);
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 		if (typeof vault.onChange !== 'function') return;
 
@@ -1322,7 +1318,6 @@ export default class FolderBridgePlugin extends Plugin {
 	async applyIgnoreListToVault(mount: MountPoint): Promise<void> {
 		this.updateIgnoreCache();
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 		if (typeof vault.onChange !== 'function') return;
 

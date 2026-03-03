@@ -221,7 +221,6 @@ export class FileWatcher {
             return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
         const vault = this.app.vault as any;
         if (typeof vault.onChange !== 'function') return;
 

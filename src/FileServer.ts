@@ -41,7 +41,7 @@ const pathMod: typeof import('path') | null = (() => { try { return (require as 
 
 // Import the single-source-of-truth MIME tables from OSHelpers so this file
 // never maintains its own independent copy.
-import { STREAMING_MIME, ALL_MEDIA_MIME } from './OSHelpers';
+import { ALL_MEDIA_MIME } from './OSHelpers';
 
 // Re-export STREAMING_MIME so consumers (VirtualAdapter, main.ts) can import
 // it from this file without needing to know it lives in OSHelpers.

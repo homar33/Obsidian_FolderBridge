@@ -272,7 +272,6 @@ export class S3Adapter {
                     MaxKeys: 1000,
                     ContinuationToken: continuationToken,
                 });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
                 const resp: any = await this.client.send(cmd);
 
                 // Files — direct object keys under this prefix
@@ -452,7 +451,6 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
             const resp: any = await this.client.send(listCmd);
             const keys: string[] = (resp.Contents ?? []).map((o: { Key?: string }) => o.Key).filter(Boolean);
 
@@ -509,7 +507,6 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
             const resp: any = await this.client.send(listCmd);
 
             for (const obj of resp.Contents ?? []) {
