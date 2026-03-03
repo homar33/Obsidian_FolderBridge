@@ -13,8 +13,7 @@ export class MountRootDeleteModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-
-        contentEl.createEl('h2', { text: 'Delete Mounted Folder' });
+        contentEl.createEl('h2', { text: 'Delete mounted folder' });
 
         contentEl.createEl('p', {
             text: `You are attempting to delete the mounted folder root "${this.mountPath}".`
@@ -33,12 +32,7 @@ export class MountRootDeleteModal extends Modal {
                     this.dontAskAgain = value;
                 })
             );
-
-        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'flex-end';
-        buttonContainer.style.gap = '10px';
-        buttonContainer.style.marginTop = '20px';
+        const buttonContainer = contentEl.createDiv({ cls: 'folderbridge-modal-buttons' });
 
         const btnCancel = buttonContainer.createEl('button', { text: 'Cancel' });
         btnCancel.onclick = () => {
@@ -49,7 +43,7 @@ export class MountRootDeleteModal extends Modal {
             }
         };
 
-        const btnUnmount = buttonContainer.createEl('button', { text: 'Unmount Only' });
+        const btnUnmount = buttonContainer.createEl('button', { text: 'Unmount only' });
         btnUnmount.onclick = () => {
             if (!this.resolved) {
                 this.resolved = true;
@@ -58,7 +52,7 @@ export class MountRootDeleteModal extends Modal {
             }
         };
 
-        const btnDelete = buttonContainer.createEl('button', { text: 'Delete Permanently', cls: 'mod-warning' });
+        const btnDelete = buttonContainer.createEl('button', { text: 'Delete permanently', cls: 'mod-warning' });
         btnDelete.onclick = () => {
             if (!this.resolved) {
                 this.resolved = true;

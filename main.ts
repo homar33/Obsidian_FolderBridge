@@ -19,7 +19,6 @@ import { S3Adapter } from './src/S3Adapter';
 import { SFTPAdapter } from './src/SFTPAdapter';
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
@@ -73,7 +72,7 @@ export default class FolderBridgePlugin extends Plugin {
 
 		// Start the localhost streaming server for video/audio in local mounts.
 		// Runs on a random available port; bound to 127.0.0.1 only.
-		this.fileServer.start().then(started => {
+		void this.fileServer.start().then(started => {
 			if (!started) return; // mobile — unavailable
 			// Register all currently active local mounts
 			for (const m of this.settings.mountPoints) {
@@ -127,9 +126,7 @@ export default class FolderBridgePlugin extends Plugin {
 			id: 'open-settings',
 			name: 'Open settings',
 			callback: () => {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				(this.app as any).setting?.open?.();
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				(this.app as any).setting?.openTabById?.('folderbridge');
 			},
 		});
@@ -147,30 +144,31 @@ export default class FolderBridgePlugin extends Plugin {
 					return;
 				}
 				// Inline FuzzySuggestModal — avoids a separate file for a small feature
-				// eslint-disable-next-line @typescript-eslint/no-this-alias
-				const plugin = this;
 				const modal = new (class extends FuzzySuggestModal<MountPoint> {
+					constructor(app: App, private readonly outerPlugin: FolderBridgePlugin) { super(app); }
 					getItems() { return myMounts; }
 					getItemText(m: MountPoint) {
 						const status = m.enabled ? '✅' : '⏸';
 						return `${status}  ${m.label || m.virtualPath}`;
 					}
-					async onChooseItem(m: MountPoint) {
-						const enabling = !m.enabled;
-						// Must remove BEFORE setting enabled=false so adapter can still resolve paths
-						if (!enabling) await plugin.notifyVaultMountRemoved(m);
-						m.enabled = enabling;
-						await plugin.saveSettings();
-						plugin.pathMapper.update(plugin.settings.mountPoints, plugin.settings.deviceId);
-						plugin.updateStatusBar();
-						if (enabling) {
-							await plugin.notifyVaultMountAdded(m);
-							new Notice(`Folder Bridge: "${m.label || m.virtualPath}" enabled.`);
-						} else {
-							new Notice(`Folder Bridge: "${m.label || m.virtualPath}" disabled.`);
-						}
+					onChooseItem(m: MountPoint) {
+						void (async () => {
+							const enabling = !m.enabled;
+							// Must remove BEFORE setting enabled=false so adapter can still resolve paths
+							if (!enabling) await this.outerPlugin.notifyVaultMountRemoved(m);
+							m.enabled = enabling;
+							await this.outerPlugin.saveSettings();
+							this.outerPlugin.pathMapper.update(this.outerPlugin.settings.mountPoints, this.outerPlugin.settings.deviceId);
+							this.outerPlugin.updateStatusBar();
+							if (enabling) {
+								await this.outerPlugin.notifyVaultMountAdded(m);
+								new Notice(`Folder Bridge: "${m.label || m.virtualPath}" enabled.`);
+							} else {
+								new Notice(`Folder Bridge: "${m.label || m.virtualPath}" disabled.`);
+							}
+						})();
 					}
-				})(this.app);
+				})(this.app, this);
 				modal.setPlaceholder('Choose a mount to toggle on / off');
 				modal.open();
 			},
@@ -230,19 +228,63 @@ export default class FolderBridgePlugin extends Plugin {
 					new Notice('Folder Bridge: No mounts configured.');
 					return;
 				}
-				// eslint-disable-next-line @typescript-eslint/no-this-alias
-				const plugin = this;
 				const modal = new (class extends FuzzySuggestModal<MountPoint> {
+					constructor(app: App, private readonly outerPlugin: FolderBridgePlugin) { super(app); }
 					getItems() { return myMounts; }
 					getItemText(m: MountPoint) {
 						const state = m.readOnly ? '🔒 read-only' : '🔓 writable';
 						return `${state}  ${m.label || m.virtualPath}`;
 					}
-					async onChooseItem(m: MountPoint) {
-						await plugin.setMountReadOnly(m.id, !m.readOnly);
+					onChooseItem(m: MountPoint) {
+						void this.outerPlugin.setMountReadOnly(m.id, !m.readOnly);
 					}
-				})(this.app);
+				})(this.app, this);
 				modal.setPlaceholder('Choose a mount to toggle read-only');
+				modal.open();
+			},
+		});
+
+		// Command: toggle global watcher-event suppression (all mounts)
+		this.addCommand({
+			id: 'toggle-watcher-suppression-all',
+			name: 'Toggle watcher event suppression (all mounts)',
+			callback: () => {
+				const wasSuppressed = this.fileWatcher?.isSuppressedAll() ?? false;
+				this.setWatcherSuppressed(null, !wasSuppressed);
+				new Notice(
+					`Folder Bridge: Watcher events ${!wasSuppressed ? 'suppressed ⏸ — external-sync changes will NOT trigger other plugins' : 'restored ▶ — external-sync changes will trigger other plugins again'}`
+				);
+			},
+		});
+
+		// Command: toggle watcher-event suppression for a specific mount
+		this.addCommand({
+			id: 'toggle-watcher-suppression-mount',
+			name: 'Toggle watcher event suppression for a specific mount…',
+			callback: () => {
+				const myMounts = this.settings.mountPoints.filter(
+					m => m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts,
+				);
+				if (myMounts.length === 0) {
+					new Notice('Folder Bridge: No mounts configured.');
+					return;
+				}
+				const modal = new (class extends FuzzySuggestModal<MountPoint> {
+					constructor(app: App, private readonly outerPlugin: FolderBridgePlugin) { super(app); }
+					getItems() { return myMounts; }
+					getItemText(m: MountPoint) {
+						const suppressed = this.outerPlugin.fileWatcher?.isSuppressed(m.id) ?? false;
+						return `${suppressed ? '⏸' : '▶'}  ${m.label || m.virtualPath}`;
+					}
+					onChooseItem(m: MountPoint) {
+						const suppressed = this.outerPlugin.fileWatcher?.isSuppressed(m.id) ?? false;
+						this.outerPlugin.setWatcherSuppressed(m.id, !suppressed);
+						new Notice(
+							`Folder Bridge: Watcher events for "${m.label || m.virtualPath}" ${!suppressed ? 'suppressed ⏸' : 'restored ▶'}`
+						);
+					}
+				})(this.app, this);
+				modal.setPlaceholder('Choose a mount to toggle watcher suppression');
 				modal.open();
 			},
 		});
@@ -288,7 +330,7 @@ export default class FolderBridgePlugin extends Plugin {
 								new Notice(`Folder Bridge: Added "${file.name}" to ignore list for mount "${mount.virtualPath}".`);
 
 								// Remove it from the vault view immediately
-								// eslint-disable-next-line @typescript-eslint/no-explicit-any
+								// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 								const vault = this.app.vault as any;
 								if (typeof vault.onChange === 'function') {
 									try {
@@ -372,7 +414,7 @@ export default class FolderBridgePlugin extends Plugin {
 			}
 		});
 
-		console.log(`FolderBridge loaded (${getPlatform()}, ${this.settings.mountPoints.filter(m => m.enabled && (m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts)).length} active mounts on this device)`);
+		console.debug(`FolderBridge loaded (${getPlatform()}, ${this.settings.mountPoints.filter(m => m.enabled && (m.deviceId === this.settings.deviceId || this.settings.allowForeignMounts)).length} active mounts on this device)`);
 	}
 
 	onunload() {
@@ -386,33 +428,28 @@ export default class FolderBridgePlugin extends Plugin {
 
 		// Restore the original adapter so the vault works normally after unload
 		if (this.originalAdapter) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app.vault as any).adapter = this.originalAdapter;
 			this.originalAdapter = null;
 		}
 
 		// Restore the original vault.getResourcePath
 		if (this.originalVaultGetResourcePath) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app.vault as any).getResourcePath = this.originalVaultGetResourcePath;
 			this.originalVaultGetResourcePath = null;
 		}
 
 		// Restore the original vault.create / vault.createBinary
 		if (this.originalVaultCreate) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app.vault as any).create = this.originalVaultCreate;
 			this.originalVaultCreate = null;
 		}
 		if (this.originalVaultCreateBinary) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app.vault as any).createBinary = this.originalVaultCreateBinary;
 			this.originalVaultCreateBinary = null;
 		}
 
 		// Restore the original app.openWithDefaultApp
 		if (this.originalOpenWithDefaultApp) {
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			(this.app as any).openWithDefaultApp = this.originalOpenWithDefaultApp;
 			this.originalOpenWithDefaultApp = null;
 		}
@@ -420,7 +457,7 @@ export default class FolderBridgePlugin extends Plugin {
 		// Stop the localhost streaming server
 		this.fileServer.stop();
 
-		console.log('FolderBridge unloaded');
+		console.debug('FolderBridge unloaded');
 	}
 
 	// ------------------------------------------------------------------
@@ -508,7 +545,6 @@ export default class FolderBridgePlugin extends Plugin {
 	// ------------------------------------------------------------------
 
 	private installVirtualAdapter(): void {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const vault = this.app.vault as any;
 		this.originalAdapter = vault.adapter;
 
@@ -575,7 +611,6 @@ export default class FolderBridgePlugin extends Plugin {
 					return typeof val === 'function' ? val.bind(target) : val;
 				}
 				// Otherwise fall through to the original adapter
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const orig = (target as any).orig?.();
 				if (orig && prop in orig) {
 					const val = orig[prop as keyof typeof orig];
@@ -590,7 +625,6 @@ export default class FolderBridgePlugin extends Plugin {
 			// original FileSystemAdapter and fully delegates all unimplemented methods
 			// back to it, reporting its prototype is semantically accurate.
 			getPrototypeOf(target) {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const orig = (target as any).orig?.();
 				return orig ? Object.getPrototypeOf(orig) : Object.getPrototypeOf(target);
 			},
@@ -616,7 +650,6 @@ export default class FolderBridgePlugin extends Plugin {
 			}
 			// Fallback to original vault method for non-mounted files
 			if (typeof this.originalVaultGetResourcePath === 'function') {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				return (this.originalVaultGetResourcePath as any)(file);
 			}
 			return '';
@@ -626,7 +659,6 @@ export default class FolderBridgePlugin extends Plugin {
 		// mounted files.  Without this, Obsidian constructs a path relative to
 		// the vault root which doesn't exist on disk for external mounts, so the
 		// "Open with default application" context-menu action silently does nothing.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const appAny = this.app as any;
 		this.originalOpenWithDefaultApp = appAny.openWithDefaultApp?.bind(this.app);
 		appAny.openWithDefaultApp = (filePath: string): void => {
@@ -636,9 +668,7 @@ export default class FolderBridgePlugin extends Plugin {
 				// Local mount: pass the real OS path directly to the shell
 				const realPath = pathMapper.toRealPath(nPath, mount);
 				try {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					const electron = (require as any)('electron');
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
 					const shellApi = (electron?.shell ?? (electron?.default as any)?.shell) as { openPath: (p: string) => Promise<string> } | undefined;
 					shellApi?.openPath(realPath).catch((e: unknown) => {
 						console.warn('[FolderBridge] openWithDefaultApp shell.openPath failed:', e);
@@ -650,7 +680,6 @@ export default class FolderBridgePlugin extends Plugin {
 			}
 			// Non-mounted or cloud file: fall through to original
 			if (typeof this.originalOpenWithDefaultApp === 'function') {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				(this.originalOpenWithDefaultApp as any)(filePath);
 			}
 		};
@@ -677,14 +706,12 @@ export default class FolderBridgePlugin extends Plugin {
 		vault.create = async function (path: string, data: string, options?: unknown): Promise<TFile | null> {
 			const nPath = normalizePath(path);
 			if (!plugin.pathMapper.getMountForPath(nPath)) {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				return (plugin.originalVaultCreate as any)(path, data, options);
 			}
 
 			// Let the original vault.create() run — it calls adapter.write() and may
 			// call vault.onChange('file-created', …) depending on the Obsidian version.
 			try {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				await (plugin.originalVaultCreate as any)(path, data, options);
 			} catch (e) {
 				// Original vault.create() might reject due to a failed filesystem check
@@ -694,7 +721,8 @@ export default class FolderBridgePlugin extends Plugin {
 			}
 
 			// If the original call already registered the TFile, return it.
-			const existing = plugin.app.vault.getAbstractFileByPath(nPath) as TFile | null;
+			const existingA = plugin.app.vault.getAbstractFileByPath(nPath);
+			const existing = existingA instanceof TFile ? existingA : null;
 			if (existing) return existing;
 
 			// Manual fallback: write the file + register the TFile immediately.
@@ -709,24 +737,25 @@ export default class FolderBridgePlugin extends Plugin {
 			if (stat && typeof vault.onChange === 'function' && !plugin.app.vault.getAbstractFileByPath(nPath)) {
 				await vault.onChange('file-created', nPath, null, stat);
 			}
-			return plugin.app.vault.getAbstractFileByPath(nPath) as TFile ?? null;
+			return plugin.app.vault.getAbstractFileByPath(nPath) instanceof TFile
+				? (plugin.app.vault.getAbstractFileByPath(nPath) as TFile)
+				: null;
 		};
 
 		vault.createBinary = async function (path: string, data: ArrayBuffer, options?: unknown): Promise<TFile | null> {
 			const nPath = normalizePath(path);
 			if (!plugin.pathMapper.getMountForPath(nPath)) {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				return (plugin.originalVaultCreateBinary as any)(path, data, options);
 			}
 
 			try {
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				await (plugin.originalVaultCreateBinary as any)(path, data, options);
 			} catch (e) {
 				console.debug('[FolderBridge] vault.createBinary() rejected for virtual path, using manual registration:', e);
 			}
 
-			const existing = plugin.app.vault.getAbstractFileByPath(nPath) as TFile | null;
+			const existingBin = plugin.app.vault.getAbstractFileByPath(nPath);
+			const existing = existingBin instanceof TFile ? existingBin : null;
 			if (existing) return existing;
 
 			try {
@@ -738,7 +767,9 @@ export default class FolderBridgePlugin extends Plugin {
 			if (stat && typeof vault.onChange === 'function' && !plugin.app.vault.getAbstractFileByPath(nPath)) {
 				await vault.onChange('file-created', nPath, null, stat);
 			}
-			return plugin.app.vault.getAbstractFileByPath(nPath) as TFile ?? null;
+			return plugin.app.vault.getAbstractFileByPath(nPath) instanceof TFile
+				? (plugin.app.vault.getAbstractFileByPath(nPath) as TFile)
+				: null;
 		};
 	}
 
@@ -1083,11 +1114,11 @@ export default class FolderBridgePlugin extends Plugin {
 	 * as a folder and inserts it into its internal TFolder tree.
 	 */
 	async notifyVaultMountAdded(mount: MountPoint): Promise<void> {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 
 		if (typeof vault.onChange !== 'function') {
-			console.log("vault.onChange is not a function!");
+			console.debug("vault.onChange is not a function!");
 			return;
 		}
 
@@ -1210,7 +1241,7 @@ export default class FolderBridgePlugin extends Plugin {
 			const fileExplorerLeaves = this.app.workspace.getLeavesOfType('file-explorer');
 			if (fileExplorerLeaves.length === 0) return;
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any -- file explorer view internals are not in public typings
 			const fileExplorerView = fileExplorerLeaves[0].view as any;
 			const fileItems = fileExplorerView.fileItems as Record<string, { setCollapsed?: (collapsed: boolean) => void }>;
 
@@ -1239,7 +1270,7 @@ export default class FolderBridgePlugin extends Plugin {
 		// [FEATURE_20260222] Stop watching the mount for external changes
 		this.fileWatcher?.stopWatching(mount);
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 		if (typeof vault.onChange !== 'function') return;
 
@@ -1291,7 +1322,7 @@ export default class FolderBridgePlugin extends Plugin {
 	async applyIgnoreListToVault(mount: MountPoint): Promise<void> {
 		this.updateIgnoreCache();
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
 		const vault = this.app.vault as any;
 		if (typeof vault.onChange !== 'function') return;
 
@@ -1438,16 +1469,55 @@ export default class FolderBridgePlugin extends Plugin {
 	// Status bar
 	// ------------------------------------------------------------------
 
+	/**
+	 * Temporarily suppress (or restore) vault-event dispatching for one mount
+	 * or for all mounts at once.  Suppression state is runtime-only: it resets
+	 * the next time the plugin is reloaded.
+	 *
+	 * **Why this is useful:** External sync tools (Obsidian Sync, rclone, rsync,
+	 * Syncthing…) write files directly to the bridged folder on disk.  Chokidar
+	 * detects those writes and FolderBridge forwards them as vault events, which
+	 * causes attachment-rename or note-refactor plugins to react as if the files
+	 * were freshly created by the user.  By muting events around a sync window
+	 * you prevent those spurious reactions while still letting user-initiated
+	 * actions (e.g. paste image from clipboard) go through Obsidian's own
+	 * internal vault path, which is unaffected by this flag.
+	 *
+	 * **Usage from external scripts** (Templater, JS Engine, QuickAdd, etc.):
+	 * ```js
+	 * const fb = app.plugins.getPlugin('folderbridge');
+	 * fb.setWatcherSuppressed(null, true);           // mute all mounts
+	 * // … wait for sync to finish …
+	 * fb.setWatcherSuppressed(null, false);          // restore all mounts
+	 *
+	 * // Or target a single mount by its id (visible in Folder Bridge settings):
+	 * fb.setWatcherSuppressed('abc123def', true);
+	 * ```
+	 *
+	 * @param mountId  The mount's `id` string, or `null` to affect every mount.
+	 * @param suppress `true` to mute events, `false` to restore them.
+	 */
+	setWatcherSuppressed(mountId: string | null, suppress: boolean): void {
+		this.fileWatcher?.setSuppressed(mountId, suppress);
+		this.updateStatusBar();
+	}
+
 	updateStatusBar(): void {
 		if (!this.statusBarItem) return;
 		const active = this.settings.mountPoints.filter(m => m.enabled).length;
 		const unreachableCount = [...this.mountHealthMap.values()].filter(v => v === false).length;
-		if (unreachableCount > 0) {
+		const allSuppressed = this.fileWatcher?.isSuppressedAll() ?? false;
+		if (allSuppressed) {
+			this.statusBarItem.setText(`⏸ Folder Bridge: events paused`);
+			this.statusBarItem.classList.remove('folderbridge-status-warning');
+			this.statusBarItem.classList.add('folderbridge-status-suppressed');
+		} else if (unreachableCount > 0) {
 			this.statusBarItem.setText(`⚠️ Folder Bridge: ${unreachableCount} unreachable`);
-			this.statusBarItem.style.color = 'var(--text-warning)';
+			this.statusBarItem.classList.remove('folderbridge-status-suppressed');
+			this.statusBarItem.classList.add('folderbridge-status-warning');
 		} else {
 			this.statusBarItem.setText(`Folder Bridge: ${active} mount${active !== 1 ? 's' : ''}`);
-			this.statusBarItem.style.color = '';
+			this.statusBarItem.classList.remove('folderbridge-status-suppressed', 'folderbridge-status-warning');
 		}
 	}
 
@@ -1472,7 +1542,6 @@ export default class FolderBridgePlugin extends Plugin {
 		}
 
 		// Back-compat: migrate global ignoreList to per-mount ignoreList
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const anySettings = this.settings as any;
 		if (anySettings.ignoreList && Array.isArray(anySettings.ignoreList)) {
 			for (const m of this.settings.mountPoints) {
@@ -1494,7 +1563,7 @@ export default class FolderBridgePlugin extends Plugin {
 		const dataToSave = {
 			...this.settings,
 			mountPoints: this.settings.mountPoints.map(m => {
-				// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars -- _pw is destructured out to exclude it from persistence
 				const { webdavPassword: _pw, ...rest } = m;
 				return rest;
 			}),
@@ -1529,28 +1598,17 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		// ── Header ──────────────────────────────────────────────────────
-		new Setting(containerEl)
-			.setName('Folder Bridge')
-			.setDesc('Mount external folders as native-feeling directories inside your vault.')
-			.setHeading();
 
 		const infoDiv = containerEl.createDiv('folderbridge-info-box');
-		infoDiv.style.padding = '10px';
-		infoDiv.style.backgroundColor = 'var(--background-modifier-message)';
-		infoDiv.style.border = '1px solid var(--background-modifier-border)';
-		infoDiv.style.borderRadius = '4px';
-		infoDiv.style.marginBottom = '20px';
 
 		infoDiv.createEl('p', {
 			text: `Platform: ${getPlatform()} | Device ID: ${this.plugin.settings.deviceId.substring(0, 8)}`,
-			cls: 'setting-item-description',
-		}).style.margin = '0 0 10px 0';
+			cls: 'setting-item-description folderbridge-info-meta',
+		});
 
 		const syncWarning = infoDiv.createEl('p', {
-			cls: 'setting-item-description',
+			cls: 'setting-item-description folderbridge-sync-warning',
 		});
-		syncWarning.style.margin = '0';
-		syncWarning.style.color = 'var(--text-warning)';
 		syncWarning.createEl('strong', { text: '⚠️ Sync Warning:' });
 		syncWarning.appendText(' If you use Obsidian Sync or Syncthing, you ');
 		syncWarning.createEl('strong', { text: 'must' });
@@ -1559,7 +1617,6 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 		syncWarning.appendText(' or Obsidian Sync Excluded Folders). Otherwise, your sync engine will try to upload the entire contents of your mounted folders!');
 
 		// ── Global options ───────────────────────────────────────────────
-		new Setting(containerEl).setName('General').setHeading();
 
 		new Setting(containerEl)
 			.setName('Dry-run mode')
@@ -1639,7 +1696,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				}));
 
 		// ── Ignore Lists ─────────────────────────────────────────────────
-		new Setting(containerEl).setName('Ignore Lists').setHeading();
+		new Setting(containerEl).setName('Ignore lists').setHeading();
 
 		// ── Global ignore patterns ───────────────────────────────────────
 		new Setting(containerEl)
@@ -1648,10 +1705,6 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 			.setHeading();
 
 		const globalIgnoreContainer = containerEl.createDiv('folderbridge-global-ignore');
-		globalIgnoreContainer.style.marginBottom = '20px';
-		globalIgnoreContainer.style.padding = '10px';
-		globalIgnoreContainer.style.border = '1px solid var(--background-modifier-border)';
-		globalIgnoreContainer.style.borderRadius = '4px';
 
 		const renderGlobalIgnoreList = () => {
 			globalIgnoreContainer.empty();
@@ -1661,11 +1714,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 			}
 			for (const item of list) {
 				const itemEl = globalIgnoreContainer.createDiv('folderbridge-ignore-item');
-				itemEl.style.display = 'flex';
-				itemEl.style.alignItems = 'center';
-				itemEl.style.justifyContent = 'space-between';
-				itemEl.style.marginBottom = '6px';
-				itemEl.createSpan({ text: item }).style.flexGrow = '1';
+				itemEl.createSpan({ text: item });
 				const removeBtn = itemEl.createEl('button', { text: 'Remove' });
 				removeBtn.onclick = async () => {
 					this.plugin.settings.globalIgnorePatterns = this.plugin.settings.globalIgnorePatterns.filter(i => i !== item);
@@ -1674,12 +1723,8 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 					renderGlobalIgnoreList();
 				};
 			}
-			const addContainer = globalIgnoreContainer.createDiv();
-			addContainer.style.display = 'flex';
-			addContainer.style.marginTop = '12px';
-			addContainer.style.gap = '8px';
+			const addContainer = globalIgnoreContainer.createDiv('folderbridge-ignore-add');
 			const inputEl = addContainer.createEl('input', { type: 'text', placeholder: 'e.g. .DS_Store, Thumbs.db, *.tmp, node_modules' });
-			inputEl.style.flexGrow = '1';
 			const addBtn = addContainer.createEl('button', { text: 'Add' });
 			addBtn.onclick = async () => {
 				const val = inputEl.value.trim();
@@ -1732,11 +1777,6 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 			const selectedMount = this.plugin.settings.mountPoints.find(m => m.id === this.selectedIgnoreMountId);
 			if (selectedMount) {
 				const ignoreListContainer = containerEl.createDiv('folderbridge-ignore-list');
-				ignoreListContainer.style.marginTop = '10px';
-				ignoreListContainer.style.marginBottom = '20px';
-				ignoreListContainer.style.padding = '10px';
-				ignoreListContainer.style.border = '1px solid var(--background-modifier-border)';
-				ignoreListContainer.style.borderRadius = '4px';
 
 				const renderIgnoreList = () => {
 					ignoreListContainer.empty();
@@ -1748,12 +1788,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 
 					for (const item of list) {
 						const itemEl = ignoreListContainer.createDiv('folderbridge-ignore-item');
-						itemEl.style.display = 'flex';
-						itemEl.style.alignItems = 'center';
-						itemEl.style.justifyContent = 'space-between';
-						itemEl.style.marginBottom = '6px';
-
-						itemEl.createSpan({ text: item }).style.flexGrow = '1';
+						itemEl.createSpan({ text: item });
 
 						const removeBtn = itemEl.createEl('button', { text: 'Remove' });
 						removeBtn.onclick = async () => {
@@ -1764,12 +1799,8 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 					}
 
 					const addContainer = ignoreListContainer.createDiv('folderbridge-ignore-add');
-					addContainer.style.display = 'flex';
-					addContainer.style.marginTop = '12px';
-					addContainer.style.gap = '8px';
 
 					const inputEl = addContainer.createEl('input', { type: 'text', placeholder: 'Name (e.g. .DS_Store) or path (e.g. vendor/cache)' });
-					inputEl.style.flexGrow = '1';
 
 					// Browse mount button — opens disk picker rooted at the mount's real path
 					// Multi-select: all chosen folders are added to the ignore list immediately.
@@ -1833,13 +1864,13 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 		}
 
 		// ── Mount points ─────────────────────────────────────────────────
-		new Setting(containerEl).setName('Mount Points').setHeading();
+		new Setting(containerEl).setName('Mount points').setHeading();
 
 		new Setting(containerEl)
 			.setName('Add a new mount')
 			.setDesc('Map an external folder to a virtual path inside your vault.')
 			.addButton(btn => btn
-				.setButtonText('Add Mount Point')
+				.setButtonText('Add mount point')
 				.setCta()
 				.onClick(() => {
 					new MountManagerModal(
@@ -2003,9 +2034,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 
 				// Disable the toggle entirely if it's not this device and foreign mounts aren't allowed
 				if (!canEnable) {
-					toggle.toggleEl.classList.add('is-disabled');
-					toggle.toggleEl.style.opacity = '0.5';
-					toggle.toggleEl.style.cursor = 'not-allowed';
+					toggle.toggleEl.classList.add('is-disabled', 'folderbridge-toggle-disabled');
 				}
 			})
 			.addExtraButton(btn => {
@@ -2018,7 +2047,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 						this.display();
 					});
 				if (mount.readOnly) {
-					btn.extraSettingsEl.style.color = 'var(--text-warning)';
+					btn.extraSettingsEl.classList.add('folderbridge-warning-icon');
 				}
 			});
 
@@ -2172,7 +2201,7 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 
 		// ── Async status badge ───────────────────────────────────────────────
 		if (canEnable) {
-			getMountStatus(mount).then(status => {
+			void getMountStatus(mount).then(status => {
 				const isUnreachable = this.plugin.mountHealthMap.get(mount.id) === false;
 				const badge = isUnreachable
 					? '[unreachable]'
@@ -2182,12 +2211,12 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 				const prefix = (isUnreachable || !status.reachable) ? '✗' : '✓';
 				setting.setName(`${prefix} ${displayName} ${badge}`);
 				if (isUnreachable || !status.reachable) {
-					setting.settingEl.style.borderLeft = '3px solid var(--text-warning)';
+					setting.settingEl.classList.add('folderbridge-unreachable-row');
 				}
 			}).catch(() => { /* ignore render errors */ });
 		} else {
 			setting.setName(`[Other Device] ${displayName}`);
-			setting.settingEl.style.opacity = '0.7';
+			setting.settingEl.classList.add('folderbridge-foreign-mount');
 		}
 	}
 }

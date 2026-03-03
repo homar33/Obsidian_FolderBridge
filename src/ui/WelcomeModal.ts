@@ -21,24 +21,21 @@ export class WelcomeModal extends Modal {
 
         contentEl.createEl('h2', { text: '👋 Welcome to Folder Bridge' });
 
-        const descEl = contentEl.createDiv();
-        descEl.style.marginBottom = '16px';
+        const descEl = contentEl.createDiv({ cls: 'folderbridge-welcome-desc' });
 
         descEl.createEl('p', {
             text: 'Folder Bridge extends Obsidian\'s single-root vault by letting you mount external folders as seamless, native-feeling directories — no copying, no duplicating, no symlinks required.',
-        }).style.marginBottom = '8px';
+        }).addClass('folderbridge-welcome-intro');
 
-        descEl.createEl('p', { text: 'What you can mount:' }).style.marginBottom = '4px';
+        descEl.createEl('p', { text: 'What you can mount:' }).addClass('folderbridge-welcome-intro');
 
-        const list = descEl.createEl('ul');
-        list.style.marginLeft = '16px';
-        list.style.marginBottom = '12px';
+        const list = descEl.createEl('ul', { cls: 'folderbridge-feature-list' });
         for (const item of [
             '📁  Local folders on this device (or a connected drive)',
             '🌐  WebDAV servers — Nextcloud, ownCloud, NAS, Synology',
             '🔗  Folders from another Obsidian vault on this device',
         ]) {
-            list.createEl('li', { text: item }).style.marginBottom = '4px';
+            list.createEl('li', { text: item, cls: 'folderbridge-feature-item' });
         }
 
         descEl.createEl('p', {
@@ -46,12 +43,7 @@ export class WelcomeModal extends Modal {
             cls: 'setting-item-description',
         });
 
-        const tipBox = contentEl.createDiv();
-        tipBox.style.padding = '10px 14px';
-        tipBox.style.backgroundColor = 'var(--background-modifier-message)';
-        tipBox.style.border = '1px solid var(--background-modifier-border)';
-        tipBox.style.borderRadius = '6px';
-        tipBox.style.marginBottom = '20px';
+        const tipBox = contentEl.createDiv({ cls: 'folderbridge-tip-box' });
         tipBox.createEl('strong', { text: '💡 Quick tip: ' });
         tipBox.appendText('After adding a mount, you can manage it from ');
         tipBox.createEl('strong', { text: 'Settings → Folder Bridge' });

@@ -40,7 +40,6 @@ type SafeStorage = {
 function getSafeStorage(): SafeStorage | null {
     try {
         // Works in Electron renderer: window.require is Electron's require shim.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const electron = (window as any).require?.('electron') ?? (require as any)('electron');
         // safeStorage lives in the main process; Obsidian re-exports it via remote.
         const ss: SafeStorage | undefined =

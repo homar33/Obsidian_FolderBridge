@@ -29,13 +29,10 @@ import { loadSessionCredential } from './CredentialStore';
 // Lazy AWS SDK loader — isolates heavy imports from mobile / initial load
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AWSModule = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type S3ClientConfig = any;
 
 function loadAWS(): AWSModule {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (require as any)('@aws-sdk/client-s3');
 }
 
@@ -55,7 +52,7 @@ export interface S3StatResult {
 // ---------------------------------------------------------------------------
 
 export class S3Adapter {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // The client instance created in the constructor
     private client: any;
     private bucket: string;
     /** Normalized key prefix for this mount, always ending with "/" (or empty for bucket root). */
@@ -275,7 +272,7 @@ export class S3Adapter {
                     MaxKeys: 1000,
                     ContinuationToken: continuationToken,
                 });
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
                 const resp: any = await this.client.send(cmd);
 
                 // Files — direct object keys under this prefix
@@ -348,7 +345,6 @@ export class S3Adapter {
     }
 
     private async streamToArrayBuffer(body: unknown): Promise<ArrayBuffer> {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const b = body as any;
         if (typeof b?.transformToByteArray === 'function') {
             const arr = await b.transformToByteArray();
@@ -456,7 +452,7 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
             const resp: any = await this.client.send(listCmd);
             const keys: string[] = (resp.Contents ?? []).map((o: { Key?: string }) => o.Key).filter(Boolean);
 
@@ -513,7 +509,7 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AWS SDK response type is not publicly exported
             const resp: any = await this.client.send(listCmd);
 
             for (const obj of resp.Contents ?? []) {
@@ -535,7 +531,6 @@ export class S3Adapter {
     // Helpers
     // ------------------------------------------------------------------
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private isNotFound(err: any): boolean {
         return (
             err?.$metadata?.httpStatusCode === 404 ||

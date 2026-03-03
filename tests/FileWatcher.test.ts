@@ -155,12 +155,10 @@ describe('FileWatcher', () => {
     // ── ignored callback ───────────────────────────────────────────────────────
 
     describe('ignored callback', () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         function getIgnored(): (p: string) => boolean {
             const { app } = makeApp();
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const options = (mockChokidarWatch.mock.calls as any)[0][1] as Record<string, unknown>;
             return options.ignored as (p: string) => boolean;
         }
@@ -187,9 +185,9 @@ describe('FileWatcher', () => {
             const isIgnored = vi.fn((name: string) => name === 'secret.md');
             const fw = new FileWatcher(app, makeMapper(mount), isIgnored);
             fw.startWatching(mount);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const options = (mockChokidarWatch.mock.calls as any)[0][1] as Record<string, unknown>;
-            const ignored = options.ignored as (p: string) => boolean;
+
+            const chokidarOptions = (mockChokidarWatch.mock.calls as any)[0][1] as Record<string, unknown>;
+            const ignored = chokidarOptions.ignored as (p: string) => boolean;
 
             expect(ignored('C:/Users/test/Documents/secret.md')).toBe(true);
             expect(ignored('C:/Users/test/Documents/notes.md')).toBe(false);

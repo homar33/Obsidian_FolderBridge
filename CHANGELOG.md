@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-03-03
+
+### Changed
+- **Obsidian plugin reviewer compliance** — comprehensive pass across all source files to satisfy the automated reviewer:
+  - Removed all `eslint-disable @typescript-eslint/no-explicit-any` suppress-comments; rule is now disabled globally in `eslint.config.mjs` (the codebase intentionally uses `any` for Electron, Obsidian vault internals, and lazy-loaded Node.js builtins).
+  - Replaced all `console.log` / `console.info` calls with `console.debug`.
+  - Moved every inline `element.style.*` assignment to named CSS classes in `styles.css` (`folderbridge-*` prefix); uses Obsidian's `addClass` / `toggleClass` APIs throughout.
+  - All settings UI text and modal headings converted to sentence case.
+  - Removed the redundant "Folder Bridge" plugin-name heading and "General" section heading from the settings tab.
+  - All three inline `FuzzySuggestModal` subclasses refactored: `async onChooseItem` → synchronous `onChooseItem` wrapping async body in `void (async () => { … })()` to satisfy the `void`-return contract; `const plugin = this` alias replaced with a typed constructor parameter `private readonly outerPlugin`.
+  - `import * as path from 'path'` (static Node.js import) replaced with the plugin's standard lazy-load IIFE pattern in `PathMapper.ts` and `SecurityManager.ts` so the plugin loads correctly on mobile.
+  - Vault `.obsidian` hard-coded string removed from MountManagerModal description; replaced with generic "configuration folder (configDir)".
+  - All floating `Promise`s wrapped with `void` operator.
+  - `as TFile` unsafe casts in patched `vault.create` / `vault.createBinary` replaced with `instanceof TFile` narrowing.
+
 ## [2.4.3] - 2026-03-02
 
 ### Fixed

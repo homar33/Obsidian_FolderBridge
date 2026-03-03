@@ -31,9 +31,7 @@ import { loadSessionCredential, decryptCredential } from './CredentialStore';
 // Lazy loader — prevents pulling in Node.js net/crypto at bundle load time
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function loadSFTPClient(): any {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (require as any)('ssh2-sftp-client');
 }
 
@@ -61,7 +59,6 @@ export class SFTPAdapter {
     private passphrase?: string;
 
     // The sftp client instance; recreated on connect
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private sftp: any = null;
     /** In-flight connect promise — all concurrent callers await the same one. */
     private connectingPromise: Promise<void> | null = null;
@@ -141,7 +138,6 @@ export class SFTPAdapter {
         const SFTPClient = loadSFTPClient();
         const client = new SFTPClient();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const connectOptions: any = {
             host: this.host,
             port: this.port,
@@ -149,7 +145,7 @@ export class SFTPAdapter {
         };
 
         if (this.privateKeyPath) {
-            const fs = (require as any)('fs'); // eslint-disable-line @typescript-eslint/no-explicit-any
+            const fs = (require as any)('fs');
             connectOptions.privateKey = fs.readFileSync(this.privateKeyPath);
             if (this.passphrase) connectOptions.passphrase = this.passphrase;
         } else if (this.password) {

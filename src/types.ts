@@ -31,6 +31,26 @@ export interface MountPoint {
 	 *   they didn't originally manage.
 	 */
 	watcherCreateFilter?: 'all' | 'markdown-only';
+	/**
+	 * When `true`, the file watcher for this mount will NEVER dispatch any
+	 * vault events (`file-created`, `file-changed`, `file-removed`, …).
+	 *
+	 * The watcher still runs and monitors the folder — it just silently drops
+	 * all events instead of forwarding them to Obsidian.  This prevents
+	 * third-party plugins (attachment-rename, note-refactor, etc.) from
+	 * reacting to files that arrive via an external sync system.
+	 *
+	 * Files written by the user inside Obsidian (e.g. paste image from
+	 * clipboard) are unaffected: those go through VirtualAdapter and Obsidian
+	 * fires its own internal vault events directly — the watcher is bypassed.
+	 *
+	 * You can also toggle suppression at runtime without touching this setting:
+	 *   const fb = app.plugins.getPlugin('folderbridge');
+	 *   fb.setWatcherSuppressed('mountId', true);   // mute one mount
+	 *   fb.setWatcherSuppressed(null, true);         // mute all mounts
+	 *   fb.setWatcherSuppressed(null, false);        // restore all
+	 */
+	watcherSuppressAllEvents?: boolean;
 	maxFiles?: number;                // Cap initial scan at this many files (0 = unlimited)
 	// Mount type (defaults to 'local' when absent)
 	mountType?: MountType;

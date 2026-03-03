@@ -18,7 +18,6 @@ export class FileWatcher {
      * Chokidar loader — resolved lazily so Node.js fs/events are never loaded on
      * Obsidian Mobile.  Can be overridden in tests to inject a mock.
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     static _loadChokidar: () => typeof Chokidar = () => (require as any)('chokidar');
 
     /**
@@ -29,10 +28,54 @@ export class FileWatcher {
     private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
     private static readonly DEFAULT_DEBOUNCE_MS = 300;
 
+    /**
+     * Runtime event-suppression state.  NOT persisted — resets on plugin reload.
+     *
+     * When a mount id is present in `suppressedMounts`, or when `_suppressAll`
+     * is true, `dispatchEvent` silently drops all vault notifications for that
+     * mount.  This lets external scripts (Templater, JS Engine, QuickAdd) mute
+     * Obsidian plugin reactions during bulk-sync windows:
+     *
+     *   const fb = app.plugins.getPlugin('folderbridge');
+     *   fb.setWatcherSuppressed(null, true);   // mute all mounts
+     *   // … run sync …
+     *   fb.setWatcherSuppressed(null, false);  // restore
+     */
+    private suppressedMounts: Set<string> = new Set();
+    private _suppressAll = false;
+
     constructor(app: App, pathMapper: PathMapper, isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean) {
         this.app = app;
         this.pathMapper = pathMapper;
         this.isIgnored = isIgnored;
+    }
+
+    // ── Suppression API ────────────────────────────────────────────────────
+
+    /**
+     * Enable or disable vault-event dispatching for one mount or all mounts.
+     *
+     * @param mountId  The mount's `id`, or `null` to affect every mount.
+     * @param suppress `true` to mute events, `false` to restore them.
+     */
+    setSuppressed(mountId: string | null, suppress: boolean): void {
+        if (mountId === null) {
+            this._suppressAll = suppress;
+        } else if (suppress) {
+            this.suppressedMounts.add(mountId);
+        } else {
+            this.suppressedMounts.delete(mountId);
+        }
+    }
+
+    /** Returns true when *all* mounts are being suppressed via the global flag. */
+    isSuppressedAll(): boolean {
+        return this._suppressAll;
+    }
+
+    /** Returns true when vault events are suppressed for the given mount. */
+    isSuppressed(mountId: string): boolean {
+        return this._suppressAll || this.suppressedMounts.has(mountId);
     }
 
     /**
@@ -63,7 +106,6 @@ export class FileWatcher {
         // Load Node.js modules lazily — these are only available on desktop.
         // Uses FileWatcher._loadChokidar so tests can supply a mock by reassigning it.
         const chokidar = FileWatcher._loadChokidar();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const path = (require as any)('path') as typeof import('path');
 
         // [FEATURE_20260222] Initialize chokidar watcher for the mount's real path
@@ -171,11 +213,18 @@ export class FileWatcher {
      * Perform the actual vault.onChange notification for a chokidar event.
      */
     private async dispatchEvent(eventType: string, realPath: string, mount: MountPoint): Promise<void> {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // ── Runtime suppression gate ──────────────────────────────────────────
+        // Checked before any path mapping so suppression has zero overhead.
+        // Also honours the persistent per-mount `watcherSuppressAllEvents` flag.
+        if (this.isSuppressed(mount.id) || mount.watcherSuppressAllEvents) {
+            console.debug(`[FolderBridge] watcher events suppressed for mount "${mount.virtualPath}" — dropped ${eventType} for ${realPath}`);
+            return;
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- vault.onChange is an internal Obsidian API not in public typings
         const vault = this.app.vault as any;
         if (typeof vault.onChange !== 'function') return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const path = (require as any)('path') as typeof import('path');
         const virtualPath = this.pathMapper.toVirtualPath(realPath, mount);
         const normalizedPath = normalizePath(virtualPath);

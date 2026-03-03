@@ -1,6 +1,7 @@
 import { normalizePath } from 'obsidian';
-import * as path from 'path';
 import { MountPoint } from './types';
+// Node.js builtins are lazy-loaded so the plugin still loads on mobile
+const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 /**
  * PathMapper maintains the list of active mount points and provides

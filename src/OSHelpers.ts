@@ -4,9 +4,7 @@ import { OSPlatform } from './types';
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor) where
 // Node APIs are unavailable.  On mobile these will be null; all functions
 // guarded behind platform checks or try-catch will gracefully return early.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
@@ -376,7 +374,6 @@ export function isReservedWindowsFilename(name: string): boolean {
  */
 export function isWSL(): boolean {
 	if (getPlatform() !== 'linux') return false;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const env = (typeof process !== 'undefined' && (process as any).env) ? process.env : {};
 	if (env.WSL_DISTRO_NAME || env.WSLENV) return true;
 	try {

@@ -4,7 +4,6 @@ import { SecurityManager } from '../SecurityManager';
 import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpers';
 
 // Lazy-loaded — unavailable on Obsidian Mobile (Capacitor).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
 
 // ---------------------------------------------------------------------------
@@ -20,17 +19,14 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 	try {
 		// `electron` is declared external in esbuild so require() resolves to
 		// the host Electron bundle, not a Node module.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const electron = (window as any).require?.('electron') ?? require('electron');
 		// Electron ≥ 14 ships remote via @electron/remote; Obsidian re-exports
 		// it on the electron object so both old and new versions work here.
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const options: any = {
 			properties: ['openDirectory'],
 			title,
@@ -55,15 +51,12 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
  */
 export async function browseMultipleFoldersOnDisk(title = 'Select Folders', defaultPath?: string): Promise<string[] | null> {
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const electron = (window as any).require?.('electron') ?? require('electron');
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const options: any = {
 			properties: ['openDirectory', 'multiSelections'],
 			title,
@@ -195,6 +188,7 @@ export class MountManagerModal extends Modal {
 	private watcherUsePolling = false;
 	private watcherPollingIntervalMs: number | undefined = undefined;
 	private watcherCreateFilter: 'all' | 'markdown-only' = 'all';
+	private watcherSuppressAllEvents = false;
 	private maxFiles: number | undefined = undefined;
 
 	// ── Component references for programmatic updates ────────────────────────
@@ -236,6 +230,7 @@ export class MountManagerModal extends Modal {
 			this.watcherUsePolling = editMount.watcherUsePolling ?? false;
 			this.watcherPollingIntervalMs = editMount.watcherPollingIntervalMs;
 			this.watcherCreateFilter = editMount.watcherCreateFilter ?? 'all';
+			this.watcherSuppressAllEvents = editMount.watcherSuppressAllEvents ?? false;
 			this.maxFiles = editMount.maxFiles;
 		}
 	}
@@ -243,7 +238,7 @@ export class MountManagerModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.createEl('h2', { text: this.editMount ? 'Edit Mount Point' : 'Add Mount Point' });
+		contentEl.createEl('h2', { text: this.editMount ? 'Edit mount point' : 'Add mount point' });
 
 		const isMobile = Platform.isMobile;
 		const platform = getPlatform();
@@ -263,11 +258,11 @@ export class MountManagerModal extends Modal {
 
 		const toggleSections = (type: MountType) => {
 			this.mountType = type;
-			localSection.style.display = type === 'local' ? '' : 'none';
-			vaultSection.style.display = type === 'vault' ? '' : 'none';
-			webdavSection.style.display = type === 'webdav' ? '' : 'none';
-			s3Section.style.display = type === 's3' ? '' : 'none';
-			sftpSection.style.display = type === 'sftp' ? '' : 'none';
+			localSection.toggleClass('folderbridge-hidden', type !== 'local');
+			vaultSection.toggleClass('folderbridge-hidden', type !== 'vault');
+			webdavSection.toggleClass('folderbridge-hidden', type !== 'webdav');
+			s3Section.toggleClass('folderbridge-hidden', type !== 's3');
+			sftpSection.toggleClass('folderbridge-hidden', type !== 'sftp');
 		};
 
 		if (isMobile) {
@@ -305,11 +300,11 @@ export class MountManagerModal extends Modal {
 
 		// ── Vault section (shown when type === 'vault') ────────────────────
 		vaultSection.createEl('p', {
-			text: 'Bridge to another Obsidian vault on this device. The vault\'s .obsidian configuration folder and .trash are automatically excluded. ' +
+			text: 'Bridge to another Obsidian vault on this device. The vault\'s configuration folder (configDir) and .trash are automatically excluded. ' +
 				'Notes and attachments from the other vault appear as regular files in your current vault.',
 			cls: 'setting-item-description',
 		});
-		vaultSection.style.marginBottom = '8px';
+		vaultSection.addClass('folderbridge-vault-section');
 
 		let vaultPathText: TextComponent | null = null;
 		new Setting(vaultSection)
@@ -804,20 +799,10 @@ export class MountManagerModal extends Modal {
 		// ── Advanced (collapsible) ─────────────────────────────────────────────
 		const details = contentEl.createEl('details', { cls: 'folderbridge-advanced' });
 		// File-watcher settings are desktop-only; hide the entire Advanced section on mobile.
-		if (isMobile) details.style.display = 'none';
-		details.style.marginTop = '12px';
-		details.style.marginBottom = '8px';
-		details.style.border = '1px solid var(--background-modifier-border)';
-		details.style.borderRadius = '4px';
-		details.style.padding = '0 10px';
+		if (isMobile) details.addClass('folderbridge-hidden');
 		const summary = details.createEl('summary', { text: 'Advanced settings' });
-		summary.style.cursor = 'pointer';
-		summary.style.padding = '8px 0';
-		summary.style.fontWeight = '600';
-		summary.style.color = 'var(--text-muted)';
 
 		const advancedContainer = details.createDiv();
-		advancedContainer.style.paddingBottom = '8px';
 
 		new Setting(advancedContainer)
 			.setName('Debounce threshold (ms)')
@@ -826,7 +811,7 @@ export class MountManagerModal extends Modal {
 				text.inputEl.type = 'number';
 				text.inputEl.min = '50';
 				text.inputEl.max = '5000';
-				text.inputEl.style.width = '80px';
+				text.inputEl.addClass('folderbridge-input-narrow');
 				text.setPlaceholder('300')
 					.setValue(this.watcherDebounceMs != null ? String(this.watcherDebounceMs) : '')
 					.onChange(val => {
@@ -860,7 +845,7 @@ export class MountManagerModal extends Modal {
 				text.inputEl.type = 'number';
 				text.inputEl.min = '500';
 				text.inputEl.max = '60000';
-				text.inputEl.style.width = '80px';
+				text.inputEl.addClass('folderbridge-input-narrow');
 				text.setPlaceholder('2000')
 					.setValue(this.watcherPollingIntervalMs != null ? String(this.watcherPollingIntervalMs) : '')
 					.onChange(val => {
@@ -885,12 +870,28 @@ export class MountManagerModal extends Modal {
 				.onChange((val) => { this.watcherCreateFilter = val as 'all' | 'markdown-only'; }));
 
 		new Setting(advancedContainer)
+			.setName('Suppress all watcher events')
+			.setDesc(
+				'When on, the file watcher monitors this folder but never forwards any ' +
+				'events to Obsidian. Useful when the folder is managed by an external ' +
+				'sync tool (rclone, Syncthing, Obsidian Sync on another vault, …) and you ' +
+				'do not want attachment-rename or note-refactor plugins to react to ' +
+				'incoming files. Files you create inside Obsidian (e.g. paste image from ' +
+				'clipboard) are unaffected — Obsidian fires its own internal event for those. ' +
+				'You can also toggle this at runtime via the command palette or from a script: ' +
+				'app.plugins.getPlugin(\'folderbridge\').setWatcherSuppressed(null, true).'
+			)
+			.addToggle(toggle => toggle
+				.setValue(this.watcherSuppressAllEvents)
+				.onChange(val => { this.watcherSuppressAllEvents = val; }));
+
+		new Setting(advancedContainer)
 			.setName('Max files (scan limit)')
 			.setDesc('Stop the initial vault scan after this many items. Leave blank for unlimited. Use this to keep Obsidian responsive with very large mounts.')
 			.addText(text => {
 				text.inputEl.type = 'number';
 				text.inputEl.min = '0';
-				text.inputEl.style.width = '100px';
+				text.inputEl.addClass('folderbridge-input-medium');
 				text.setPlaceholder('unlimited')
 					.setValue(this.maxFiles != null ? String(this.maxFiles) : '')
 					.onChange(val => {
@@ -901,7 +902,7 @@ export class MountManagerModal extends Modal {
 		// ── Action buttons ─────────────────────────────────────────────────
 		new Setting(contentEl)
 			.addButton(btn => btn
-				.setButtonText(this.editMount ? 'Save Changes' : 'Validate & Add')
+				.setButtonText(this.editMount ? 'Save changes' : 'Validate & add')
 				.setCta()
 				.onClick(() => { this.handleSave().catch(console.error); }))
 			.addButton(btn => btn
@@ -1150,6 +1151,7 @@ export class MountManagerModal extends Modal {
 				watcherUsePolling: this.watcherUsePolling || undefined,
 				watcherPollingIntervalMs: this.watcherUsePolling ? this.watcherPollingIntervalMs : undefined,
 				watcherCreateFilter: this.watcherCreateFilter !== 'all' ? this.watcherCreateFilter : undefined,
+				watcherSuppressAllEvents: this.watcherSuppressAllEvents || undefined,
 				maxFiles: this.maxFiles,
 			},
 			this.editMount?.id,

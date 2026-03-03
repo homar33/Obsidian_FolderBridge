@@ -35,11 +35,8 @@
  */
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const httpMod: typeof import('http') | null = (() => { try { return (require as any)('http'); } catch { return null; } })();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const fsMod: typeof import('fs') | null = (() => { try { return (require as any)('fs'); } catch { return null; } })();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const pathMod: typeof import('path') | null = (() => { try { return (require as any)('path'); } catch { return null; } })();
 
 // Import the single-source-of-truth MIME tables from OSHelpers so this file
