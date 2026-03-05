@@ -597,6 +597,40 @@ export default class FolderBridgePlugin extends Plugin {
 			},
 			(name: string, mount: MountPoint, mountRelativePath?: string) => {
 				return this.isNameIgnored(name, mount, mountRelativePath);
+			},
+			// onModify: fired after every successful write/append on a mounted path.
+			//
+			// Obsidian's own file-system watcher only monitors the vault directory, so
+			// it never fires vault.onChange('raw', …) for writes to external mount paths.
+			// FolderBridge's Chokidar watcher covers external changes from other apps,
+			// but on Windows network/mapped drives (SMB) native ReadDirectoryChangesW
+			// events often don't propagate — so Chokidar misses writes that originate
+			// inside Obsidian too (e.g. Bases editing frontmatter).  The net effect is
+			// that MetadataCache stays stale and features like Bases never update their
+			// views after a frontmatter edit until the plugin is toggled or Obsidian is
+			// restarted.
+			//
+			// Firing 'file-changed' + 'raw' here is the same thing FileWatcher does for
+			// externally-detected changes, and mirrors the vault.create() patch above.
+			// If Chokidar also fires for the same write (on drives that DO support native
+			// events) the double notification is harmless — MetadataCache re-reads the
+			// file twice and emits 'changed' once.
+			async (normalizedPath: string) => {
+				const mountForPath = this.pathMapper.getMountForPath(normalizedPath);
+				if (!mountForPath) return;
+				// Respect per-mount and runtime suppression flags.
+				if (this.fileWatcher?.isSuppressed(mountForPath.id) || mountForPath.watcherSuppressAllEvents) return;
+				const vault = this.app.vault as any;
+				if (typeof vault.onChange !== 'function') return;
+				try {
+					const stat = await this.app.vault.adapter.stat(normalizedPath);
+					if (stat) {
+						await vault.onChange('file-changed', normalizedPath, null, stat);
+						await vault.onChange('raw', normalizedPath, null, null);
+					}
+				} catch {
+					// Best-effort: stat may fail transiently (e.g. cloud mount); ignore.
+				}
 			}
 		);
 
@@ -1258,7 +1292,7 @@ export default class FolderBridgePlugin extends Plugin {
 	/**
 	 * Remove a virtual mount folder from Obsidian's internal vault index
 	 * so the file explorer stops showing it immediately after removal.
-	 * 
+	 *
 	 * [BUGFIX_20260222] This method must be called BEFORE the mount is removed
 	 * from the PathMapper, otherwise adapter.list() will fail to resolve the
 	 * virtual paths to real paths, and the files will remain orphaned in the UI.

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-03-05
+
+### Fixed
+- **Bases table not updating after frontmatter edits on mounted folders** — when the Bases plugin (or any feature that uses `vault.process()`) edited frontmatter in a file inside a mounted folder, the change was written to disk correctly but Obsidian's MetadataCache was never notified. Obsidian's own file-system watcher only monitors the vault directory, so it never fires `vault.onChange('raw', …)` for external mount paths. On Windows mapped/network drives (SMB) the situation is worse: native `ReadDirectoryChangesW` events typically don't propagate over the network, so FolderBridge's Chokidar watcher (with `usePolling: false`, the default for local mounts) also missed the write. The result was a stale cache — Bases views, Dataview queries, and any other metadata-dependent feature would not refresh until the plugin was toggled or Obsidian was restarted. `VirtualAdapter` now fires `vault.onChange('file-changed', …)` and `vault.onChange('raw', …)` immediately after every successful `write()`, `writeBinary()`, and `append()` call on a mounted path, for all backends (local filesystem, WebDAV, S3, SFTP). This is the same mechanism already used by the existing `vault.create()` patch and by the `FileWatcher` for externally-detected changes. Suppression flags (`watcherSuppressAllEvents`, `setWatcherSuppressed()`) are respected so bulk-sync tooling is unaffected.
+
 ## [2.5.0] - 2026-03-03
 
 ### Changed

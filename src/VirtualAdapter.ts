@@ -54,6 +54,18 @@ export class VirtualAdapter {
 	private readOnlyNoticedMounts: Set<string> = new Set();
 	/** Optional localhost HTTP server for streaming video/audio from local mounts. */
 	private fileServer: FileServer | null = null;
+	/**
+	 * Called after every successful write/append on a mounted path so that
+	 * Obsidian's MetadataCache is immediately notified.  Without this callback,
+	 * Obsidian's own file-system watcher (which only watches the vault directory)
+	 * never fires `vault.onChange('raw', …)` for paths on external mounts, leaving
+	 * MetadataCache stale — which means features like Bases that subscribe to
+	 * metadata-changed events won't update their views after a frontmatter edit.
+	 * Particularly important for Windows mapped / network drives where native
+	 * ReadDirectoryChangesW notifications don't propagate over SMB, so Chokidar
+	 * (with usePolling:false) also misses the write.
+	 */
+	private onModify?: (normalizedPath: string) => Promise<void>;
 
 	constructor(
 		original: unknown,
@@ -63,7 +75,8 @@ export class VirtualAdapter {
 		maxDataUriBytes = 10 * 1024 * 1024,
 		onMountRootDelete: (mount: MountPoint) => Promise<'unmount' | 'delete' | 'cancel'>,
 		onMountRootMove: (mount: MountPoint, newVirtualPath: string) => Promise<void>,
-		isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean
+		isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean,
+		onModify?: (normalizedPath: string) => Promise<void>
 	) {
 		this.original = original;
 		this.pathMapper = pathMapper;
@@ -73,6 +86,7 @@ export class VirtualAdapter {
 		this.onMountRootDelete = onMountRootDelete;
 		this.onMountRootMove = onMountRootMove;
 		this.isIgnored = isIgnored;
+		this.onModify = onModify;
 	}
 
 	/** Register the FileServer instance so getResourcePath can use it for video/audio. */
@@ -578,18 +592,21 @@ export class VirtualAdapter {
 			if (webdav) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.writeText(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.writeText(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.writeText(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const realPath = this.toReal(normalizedPath, mount);
@@ -600,6 +617,7 @@ export class VirtualAdapter {
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
 				await fs.promises.writeFile(realPath, data, 'utf8');
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			} catch (e) {
 				const errorMsg = `Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
@@ -619,18 +637,21 @@ export class VirtualAdapter {
 			if (webdav) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.writeBinary(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.writeBinary(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.writeBinary(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const realPath = this.toReal(normalizedPath, mount);
@@ -639,7 +660,8 @@ export class VirtualAdapter {
 			if (this.dryRun) { console.debug(`[FolderBridge DryRun] writeBinary → ${realPath}`); return; }
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
-				return await fs.promises.writeFile(realPath, Buffer.from(data));
+				await fs.promises.writeFile(realPath, Buffer.from(data));
+				void this.onModify?.(normalizedPath).catch(() => { });
 			} catch (e) {
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'writeBinary')}`);
 			}
@@ -656,25 +678,29 @@ export class VirtualAdapter {
 			if (webdav) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.append(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.append(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
 				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.append(this.toServerPath(normalizedPath, mount), data);
+				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			if (this.dryRun) { console.debug(`[FolderBridge DryRun] append → ${realPath}`); return; }
 			try {
-				return await fs.promises.appendFile(realPath, data, 'utf8');
+				await fs.promises.appendFile(realPath, data, 'utf8');
+				void this.onModify?.(normalizedPath).catch(() => { });
 			} catch (e) {
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'append')}`);
 			}
