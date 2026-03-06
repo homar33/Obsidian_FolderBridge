@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-03-06
+
+### Changed
+- **Reviewer-focused cleanup and publication hardening** — broad source cleanup pass aimed at Obsidian community-plugin reviewer categories and long-term maintainability:
+  - Introduced a shared internal logger in `src/logger.ts` and routed source logging through `logger.debug()`, `logger.warn()`, and `logger.error()` instead of direct `console.*` usage.
+  - Added `src/runtimeNode.ts` as the shared lazy runtime loader for optional Node/Electron modules, replacing remaining direct `require()`-style patterns across the codebase.
+  - Normalized async UI callbacks to synchronous wrappers where Obsidian expects `void` handlers, avoiding reviewer/lint warnings around promise-returning event callbacks.
+  - Tightened internal typing around Obsidian/Electron private APIs and adapter delegation to reduce unnecessary assertions and unsafe casts.
+  - Simplified duplicated settings UI logic, including the per-device override-path action.
+
+### Fixed
+- **User-facing copy polish in onboarding and mount dialogs** — final sentence-case and wording pass across `WelcomeModal`, `MountManagerModal`, and `MountRootDeleteModal` to make onboarding and destructive actions clearer and more reviewer-friendly.
+- **Reviewer hot spots in TypeScript source** — cleaned up remaining publication-risk patterns identified in the final sweep, including direct `console.*` usage, hardcoded vault config-folder references, and older desktop-only module loading patterns.
+
 ## [2.6.0] - 2026-03-05
 
 ### Fixed
