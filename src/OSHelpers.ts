@@ -1,11 +1,12 @@
 import { Platform } from 'obsidian';
 import { OSPlatform } from './types';
+import { loadOptionalNodeModule } from './runtimeNode';
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor) where
 // Node APIs are unavailable.  On mobile these will be null; all functions
 // guarded behind platform checks or try-catch will gracefully return early.
-const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
-const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
+const fs: typeof import('fs') = loadOptionalNodeModule<typeof import('fs')>('fs') ?? null as never;
+const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
 
 // ---------------------------------------------------------------------------
 // Platform detection
@@ -374,7 +375,7 @@ export function isReservedWindowsFilename(name: string): boolean {
  */
 export function isWSL(): boolean {
 	if (getPlatform() !== 'linux') return false;
-	const env = (typeof process !== 'undefined' && (process as any).env) ? process.env : {};
+	const env = (typeof process !== 'undefined' && process.env) ? process.env : {};
 	if (env.WSL_DISTRO_NAME || env.WSLENV) return true;
 	try {
 		const version = fs.readFileSync('/proc/version', 'utf8');

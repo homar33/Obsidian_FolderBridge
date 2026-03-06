@@ -44,11 +44,29 @@ function makeMapper(mount: MountPoint): PathMapper {
     return mapper;
 }
 
+type WatcherCallback = (...args: unknown[]) => void | Promise<void>;
+type IgnoredCallback = (path: string) => boolean;
+type WatchOptions = { ignored?: IgnoredCallback };
+
 /** Return the callback registered on the mock watcher for a given chokidar event. */
-function getCallback(eventName: string): ((...args: unknown[]) => Promise<void>) {
+function getCallback(eventName: string): WatcherCallback {
     const call = mockWatcherOn.mock.calls.find(c => c[0] === eventName);
     if (!call) throw new Error(`No chokidar handler for '${eventName}'`);
-    return call[1] as ((...args: unknown[]) => Promise<void>);
+    return call[1] as WatcherCallback;
+}
+
+function getPathCallback(eventName: string): (path: string) => void | Promise<void> {
+    return (path: string) => getCallback(eventName)(path);
+}
+
+function getWatchOptions(): WatchOptions {
+    const firstCall = mockChokidarWatch.mock.calls[0] as unknown[] | undefined;
+    if (!firstCall || firstCall.length < 2) throw new Error('Expected chokidar.watch to be called');
+
+    const options = firstCall[1];
+    if (!options || typeof options !== 'object') throw new Error('Expected chokidar.watch options object');
+
+    return options as WatchOptions;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -159,8 +177,9 @@ describe('FileWatcher', () => {
             const { app } = makeApp();
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
-            const options = (mockChokidarWatch.mock.calls as any)[0][1] as Record<string, unknown>;
-            return options.ignored as (p: string) => boolean;
+            const options = getWatchOptions();
+            if (!options.ignored) throw new Error('Expected ignored callback to be registered');
+            return options.ignored;
         }
 
         it('ignores hidden files (name starts with .)', () => {
@@ -186,8 +205,9 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), isIgnored);
             fw.startWatching(mount);
 
-            const chokidarOptions = (mockChokidarWatch.mock.calls as any)[0][1] as Record<string, unknown>;
-            const ignored = chokidarOptions.ignored as (p: string) => boolean;
+            const chokidarOptions = getWatchOptions();
+            if (!chokidarOptions.ignored) throw new Error('Expected ignored callback to be registered');
+            const ignored = chokidarOptions.ignored;
 
             expect(ignored('C:/Users/test/Documents/secret.md')).toBe(true);
             expect(ignored('C:/Users/test/Documents/notes.md')).toBe(false);
@@ -227,7 +247,7 @@ describe('FileWatcher', () => {
             fw.startWatching(mount);
 
             // handleEvent is synchronous — must advance timers to trigger dispatchEvent
-            (getCallback('change') as (p: string) => void)('C:/Users/test/Documents/note.md');
+            getPathCallback('change')('C:/Users/test/Documents/note.md');
             await vi.runAllTimersAsync();
 
             expect(mockOnChange).toHaveBeenCalledWith('file-changed', 'mounts/docs/note.md', null, expect.any(Object));
@@ -242,7 +262,7 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            (getCallback('change') as (p: string) => void)('C:/Users/test/Documents/note.md');
+            getPathCallback('change')('C:/Users/test/Documents/note.md');
             await vi.runAllTimersAsync();
 
             expect(mockOnChange).not.toHaveBeenCalled();
@@ -256,7 +276,7 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            const changeCb = getCallback('change') as (p: string) => void;
+            const changeCb = getPathCallback('change');
             changeCb('C:/Users/test/Documents/note.md');
             changeCb('C:/Users/test/Documents/note.md');
             changeCb('C:/Users/test/Documents/note.md');
@@ -275,7 +295,7 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            const changeCb = getCallback('change') as (p: string) => void;
+            const changeCb = getPathCallback('change');
             changeCb('C:/Users/test/Documents/note.md');
             await vi.advanceTimersByTimeAsync(100); // before DEBOUNCE_MS
             expect(mockOnChange).not.toHaveBeenCalled();
@@ -296,7 +316,7 @@ describe('FileWatcher', () => {
             const fw = new FileWatcher(app, makeMapper(mount), () => false);
             fw.startWatching(mount);
 
-            const changeCb = getCallback('change') as (p: string) => void;
+            const changeCb = getPathCallback('change');
             changeCb('C:/Users/test/Documents/a.md');
             changeCb('C:/Users/test/Documents/b.md');
             await vi.runAllTimersAsync();

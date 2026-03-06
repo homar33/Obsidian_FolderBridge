@@ -4,6 +4,15 @@ import type * as Chokidar from 'chokidar';
 import { App, normalizePath, Platform } from 'obsidian';
 import { MountPoint } from './types';
 import { PathMapper } from './PathMapper';
+import { logger } from './logger';
+import { loadOptionalNodeModule } from './runtimeNode';
+
+const pathMod: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
+
+/** Private vault onChange interface used for external-change notifications. */
+type VaultInternal = {
+    onChange(event: string, path: string, prev: null, stat: { type: string; ctime: number; mtime: number; size: number } | null): Promise<void>;
+};
 
 /** Markdown-ish extensions that should always fire vault events, even under 'markdown-only' filter. */
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.canvas', '.mdx']);
@@ -18,7 +27,11 @@ export class FileWatcher {
      * Chokidar loader — resolved lazily so Node.js fs/events are never loaded on
      * Obsidian Mobile.  Can be overridden in tests to inject a mock.
      */
-    static _loadChokidar: () => typeof Chokidar = () => (require as any)('chokidar');
+    static _loadChokidar: () => typeof Chokidar = () => {
+        const chokidar = loadOptionalNodeModule<typeof Chokidar>('chokidar');
+        if (!chokidar) throw new Error('chokidar is unavailable in this environment');
+        return chokidar;
+    };
 
     /**
      * Per-path debounce timers for 'file-changed' events.  Keyed by real path
@@ -86,14 +99,14 @@ export class FileWatcher {
         // Capacitor WebView on Android / iOS.  Skip file watching on mobile entirely;
         // the vault is refreshed manually or via WebDAV polling.
         if (Platform.isMobile) {
-            console.debug(`[FolderBridge] Skipping file watcher on mobile for: ${mount.virtualPath}`);
+            logger.debug(`[FolderBridge] Skipping file watcher on mobile for: ${mount.virtualPath}`);
             return;
         }
 
         // Cloud mounts (WebDAV, S3, SFTP) are accessed over the network — there
         // is no local filesystem path to watch for native change events.
         if (mount.mountType === 'webdav' || mount.mountType === 's3' || mount.mountType === 'sftp') {
-            console.debug(`[FolderBridge] Skipping file watcher for ${mount.mountType ?? 'remote'} mount: ${mount.virtualPath}`);
+            logger.debug(`[FolderBridge] Skipping file watcher for ${mount.mountType ?? 'remote'} mount: ${mount.virtualPath}`);
             return;
         }
 
@@ -106,7 +119,7 @@ export class FileWatcher {
         // Load Node.js modules lazily — these are only available on desktop.
         // Uses FileWatcher._loadChokidar so tests can supply a mock by reassigning it.
         const chokidar = FileWatcher._loadChokidar();
-        const path = (require as any)('path') as typeof import('path');
+        const path = pathMod;
 
         // [FEATURE_20260222] Initialize chokidar watcher for the mount's real path
         const watcher = chokidar.watch(realPath, {
@@ -152,10 +165,10 @@ export class FileWatcher {
             .on('unlink', (filePath) => this.handleEvent('file-removed', filePath, mount))
             .on('addDir', (dirPath) => this.handleEvent('folder-created', dirPath, mount))
             .on('unlinkDir', (dirPath) => this.handleEvent('folder-removed', dirPath, mount))
-            .on('error', (error) => console.warn(`[FolderBridge] Watcher error for mount ${mount.virtualPath}:`, error));
+            .on('error', (error) => logger.warn(`[FolderBridge] Watcher error for mount ${mount.virtualPath}:`, error));
 
         this.watchers.set(mount.id, watcher);
-        console.debug(`[FolderBridge] Started watching: ${realPath}`);
+        logger.debug(`[FolderBridge] Started watching: ${realPath}`);
     }
 
     /**
@@ -164,9 +177,9 @@ export class FileWatcher {
     stopWatching(mount: MountPoint): void {
         const watcher = this.watchers.get(mount.id);
         if (watcher) {
-            watcher.close();
+            void watcher.close();
             this.watchers.delete(mount.id);
-            console.debug(`[FolderBridge] Stopped watching: ${this.pathMapper.getEffectiveRealPath(mount)}`);
+            logger.debug(`[FolderBridge] Stopped watching: ${this.pathMapper.getEffectiveRealPath(mount)}`);
         }
     }
 
@@ -179,7 +192,7 @@ export class FileWatcher {
         for (const timer of this.debounceTimers.values()) clearTimeout(timer);
         this.debounceTimers.clear();
         for (const watcher of this.watchers.values()) {
-            watcher.close();
+            void watcher.close();
         }
         this.watchers.clear();
     }
@@ -217,14 +230,14 @@ export class FileWatcher {
         // Checked before any path mapping so suppression has zero overhead.
         // Also honours the persistent per-mount `watcherSuppressAllEvents` flag.
         if (this.isSuppressed(mount.id) || mount.watcherSuppressAllEvents) {
-            console.debug(`[FolderBridge] watcher events suppressed for mount "${mount.virtualPath}" — dropped ${eventType} for ${realPath}`);
+            logger.debug(`[FolderBridge] watcher events suppressed for mount "${mount.virtualPath}" — dropped ${eventType} for ${realPath}`);
             return;
         }
 
-        const vault = this.app.vault as any;
+        const vault = this.app.vault as typeof this.app.vault & VaultInternal;
         if (typeof vault.onChange !== 'function') return;
 
-        const path = (require as any)('path') as typeof import('path');
+        const path = pathMod;
         const virtualPath = this.pathMapper.toVirtualPath(realPath, mount);
         const normalizedPath = normalizePath(virtualPath);
 
@@ -236,7 +249,7 @@ export class FileWatcher {
         if (eventType === 'file-created' && mount.watcherCreateFilter === 'markdown-only') {
             const ext = path.extname(normalizedPath).toLowerCase();
             if (!MARKDOWN_EXTENSIONS.has(ext)) {
-                console.debug(`[FolderBridge] watcherCreateFilter=markdown-only: suppressed file-created for ${normalizedPath}`);
+                logger.debug(`[FolderBridge] watcherCreateFilter=markdown-only: suppressed file-created for ${normalizedPath}`);
                 return;
             }
         }
@@ -266,7 +279,7 @@ export class FileWatcher {
                 await vault.onChange('raw', normalizedPath, null, null);
             }
         } catch (e) {
-            console.debug(`[FolderBridge] Failed to handle watcher event ${eventType} for ${normalizedPath}:`, e);
+            logger.debug(`[FolderBridge] Failed to handle watcher event ${eventType} for ${normalizedPath}:`, e);
         }
     }
 }

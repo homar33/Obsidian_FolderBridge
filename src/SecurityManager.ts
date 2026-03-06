@@ -1,7 +1,8 @@
 import { MountPoint, MountType } from './types';
 import { normalizeForComparison, isUNCPath } from './OSHelpers';
+import { loadOptionalNodeModule } from './runtimeNode';
 // Node.js builtins are lazy-loaded so the plugin still loads on mobile
-const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
+const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
 
 /** Mount types whose realPath is a remote address, not a local filesystem path. */
 const CLOUD_MOUNT_TYPES: Set<MountType> = new Set(['webdav', 's3', 'sftp']);

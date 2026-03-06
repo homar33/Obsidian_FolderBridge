@@ -1,7 +1,8 @@
 import { normalizePath } from 'obsidian';
 import { MountPoint } from './types';
+import { loadOptionalNodeModule } from './runtimeNode';
 // Node.js builtins are lazy-loaded so the plugin still loads on mobile
-const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
+const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
 
 /**
  * PathMapper maintains the list of active mount points and provides

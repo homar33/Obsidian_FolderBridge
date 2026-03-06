@@ -1,4 +1,4 @@
-import { normalizePath, Notice } from 'obsidian';
+import { normalizePath, Notice, DataAdapter, DataWriteOptions } from 'obsidian';
 import { PathMapper } from './PathMapper';
 import { SecurityManager } from './SecurityManager';
 import { MountPoint } from './types';
@@ -6,6 +6,8 @@ import { WebDAVAdapter } from './WebDAVAdapter';
 import { S3Adapter } from './S3Adapter';
 import { SFTPAdapter } from './SFTPAdapter';
 import { FileServer, STREAMING_MIME } from './FileServer';
+import { logger } from './logger';
+import { loadOptionalNodeModule } from './runtimeNode';
 import {
 	realPathToResourceUrl,
 	tryReadAsDataUri,
@@ -19,8 +21,8 @@ import {
 // Lazy-loaded Node.js builtins — wrapped in try/catch so the bundle loads on
 // Obsidian Mobile (Capacitor) where Node APIs are unavailable.  On mobile these
 // will be null; local-mount operations gracefully fail while WebDAV mounts work.
-const fs: typeof import('fs') = (() => { try { return (require as any)('fs'); } catch { return null as never; } })();
-const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
+const fs: typeof import('fs') = loadOptionalNodeModule<typeof import('fs')>('fs') ?? null as never;
+const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
 
 /**
  * VirtualAdapter is a shim that wraps Obsidian's built-in FileSystemAdapter.
@@ -123,7 +125,9 @@ export class VirtualAdapter {
 	clearSFTPAdapter(mountId: string): void {
 		const adapter = this.sftpAdapters.get(mountId);
 		if (adapter) {
-			adapter.disconnect().catch(console.error);
+			void adapter.disconnect().catch(error => {
+				logger.error(`[FolderBridge] Failed to disconnect SFTP adapter for mount ${mountId}:`, error);
+			});
 			this.sftpAdapters.delete(mountId);
 		}
 	}
@@ -162,7 +166,7 @@ export class VirtualAdapter {
 	// Delegation helper
 	// ------------------------------------------------------------------
 
-	private orig(): any { return this.original; }
+	private orig(): DataAdapter { return this.original as DataAdapter; }
 
 	// ------------------------------------------------------------------
 	// Path helpers
@@ -290,7 +294,7 @@ export class VirtualAdapter {
 		if (mount && !VirtualAdapter.isCloudMount(mount)) {
 			return this.pathMapper.toRealPath(normalizedPath, mount);
 		}
-		return this.orig().getFullPath?.(normalizedPath) ?? normalizedPath;
+		return (this.orig() as DataAdapter & { getFullPath?(path: string): string }).getFullPath?.(normalizedPath) ?? normalizedPath;
 	}
 
 	// ------------------------------------------------------------------
@@ -353,7 +357,7 @@ export class VirtualAdapter {
 			} catch (e) {
 				// Obsidian expects null for missing files, not an error
 				if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-					console.debug(`[FolderBridge] stat failed for "${realPath}":`, e);
+					logger.debug(`[FolderBridge] stat failed for "${realPath}":`, e);
 				}
 				return null;
 			}
@@ -379,9 +383,9 @@ export class VirtualAdapter {
 	async list(normalizedPath: string): Promise<{ files: string[]; folders: string[] }> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			console.debug(`[FolderBridge] list: found mount for "${normalizedPath}"`);
+			logger.debug(`[FolderBridge] list: found mount for "${normalizedPath}"`);
 			if (this.isPathIgnored(normalizedPath, mount)) {
-				console.debug(`[FolderBridge] list: path is ignored, returning empty`);
+				logger.debug(`[FolderBridge] list: path is ignored, returning empty`);
 				return { files: [], folders: [] };
 			}
 			const webdav = this.getWebDAV(mount);
@@ -400,11 +404,11 @@ export class VirtualAdapter {
 				return await sftp.list(sp, normalizedPath, mount);
 			}
 			const realPath = this.toReal(normalizedPath, mount);
-			console.debug(`[FolderBridge] list: resolved to real path "${realPath}"`);
+			logger.debug(`[FolderBridge] list: resolved to real path "${realPath}"`);
 			try {
 				return await this.listRealDirectory(realPath, normalizedPath, mount);
 			} catch (e) {
-				console.error(`[FolderBridge] list failed for mount "${mount.virtualPath}":`, e);
+				logger.error(`[FolderBridge] list failed for mount "${mount.virtualPath}":`, e);
 				// Return empty instead of throwing to avoid breaking the UI
 				return { files: [], folders: [] };
 			}
@@ -449,15 +453,15 @@ export class VirtualAdapter {
 			entries = await fs.promises.readdir(realDirPath, { withFileTypes: true });
 		} catch (e) {
 			const msg = translateFsError(e as NodeJS.ErrnoException, 'list');
-			console.error(`[FolderBridge] Failed to list directory "${realDirPath}":`, msg);
+			logger.error(`[FolderBridge] Failed to list directory "${realDirPath}":`, msg);
 			throw new Error(`Folder Bridge: Cannot list "${realDirPath}": ${msg}`);
 		}
 
-		console.debug(`[FolderBridge] listRealDirectory: found ${entries.length} entries in "${realDirPath}"`);
+		logger.debug(`[FolderBridge] listRealDirectory: found ${entries.length} entries in "${realDirPath}"`);
 
 		// Warn if directory is extremely large
 		if (entries.length > MAX_ENTRIES) {
-			console.warn(`[FolderBridge] WARNING: Directory "${realDirPath}" contains ${entries.length} items. Plate Folder Bridge limits display to ${MAX_ENTRIES} items for performance.`);
+			logger.warn(`[FolderBridge] WARNING: Directory "${realDirPath}" contains ${entries.length} items. Plate Folder Bridge limits display to ${MAX_ENTRIES} items for performance.`);
 		}
 
 		for (let i = 0; i < entries.length && i < MAX_ENTRIES; i++) {
@@ -480,7 +484,7 @@ export class VirtualAdapter {
 			} else if (entry.isSymbolicLink()) {
 				// For very large directories, skip symlink resolution to avoid delay
 				if (entries.length > 1000) {
-					console.debug(`[FolderBridge] Skipping symlink resolution in large directory (${entries.length} items)`);
+					logger.debug(`[FolderBridge] Skipping symlink resolution in large directory (${entries.length} items)`);
 					// Assume it's a file (safer default)
 					files.push(virtualChild);
 				} else {
@@ -499,7 +503,7 @@ export class VirtualAdapter {
 			}
 		}
 
-		console.debug(`[FolderBridge] listRealDirectory: returning ${folders.length} folders and ${files.length} files`);
+		logger.debug(`[FolderBridge] listRealDirectory: returning ${folders.length} folders and ${files.length} files`);
 		return { files, folders };
 	}
 
@@ -522,7 +526,7 @@ export class VirtualAdapter {
 			try {
 				return await fs.promises.readFile(realPath, 'utf8');
 			} catch (e) {
-				console.error(`[FolderBridge] read failed for "${realPath}":`, e);
+				logger.error(`[FolderBridge] read failed for "${realPath}":`, e);
 				if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
 					// Check whether the file is an online-only cloud placeholder
 					// (e.g. OneDrive Files On Demand) before surfacing a raw ENOENT.
@@ -559,7 +563,7 @@ export class VirtualAdapter {
 			try {
 				const buf = await fs.promises.readFile(realPath);
 				// Return a proper ArrayBuffer (buf.buffer may be a shared Buffer pool slice)
-				return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+				return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 			} catch (e) {
 				if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
 					if (await isCloudPlaceholder(realPath)) {
@@ -590,21 +594,21 @@ export class VirtualAdapter {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav write → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.writeText(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 write → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] s3 write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.writeText(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp write → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] sftp write → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.writeText(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
@@ -613,7 +617,7 @@ export class VirtualAdapter {
 
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] write → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] write → ${realPath}`); return; }
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
 				await fs.promises.writeFile(realPath, data, 'utf8');
@@ -621,11 +625,11 @@ export class VirtualAdapter {
 				return;
 			} catch (e) {
 				const errorMsg = `Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'write')}`;
-				console.error(`[FolderBridge] write failed for "${realPath}":`, e, errorMsg);
+				logger.error(`[FolderBridge] write failed for "${realPath}":`, e, errorMsg);
 				throw new Error(errorMsg);
 			}
 		}
-		return this.orig().write(normalizedPath, data, options);
+		return this.orig().write(normalizedPath, data, options as DataWriteOptions | undefined);
 	}
 
 	async writeBinary(normalizedPath: string, data: ArrayBuffer, options?: unknown): Promise<void> {
@@ -635,21 +639,21 @@ export class VirtualAdapter {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.writeBinary(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] s3 writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.writeBinary(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] sftp writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.writeBinary(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
@@ -657,7 +661,7 @@ export class VirtualAdapter {
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
 			this.assertNotReserved(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] writeBinary → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] writeBinary → ${realPath}`); return; }
 			try {
 				await fs.promises.mkdir(path.dirname(realPath), { recursive: true });
 				await fs.promises.writeFile(realPath, Buffer.from(data));
@@ -666,7 +670,7 @@ export class VirtualAdapter {
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'writeBinary')}`);
 			}
 		}
-		return this.orig().writeBinary(normalizedPath, data, options);
+		return this.orig().writeBinary(normalizedPath, data, options as DataWriteOptions | undefined);
 	}
 
 	async append(normalizedPath: string, data: string, options?: unknown): Promise<void> {
@@ -676,28 +680,28 @@ export class VirtualAdapter {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot append to ignored path "${normalizedPath}"`);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] webdav append → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.append(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] s3 append → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] s3 append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3.append(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
-				if (this.dryRun) { console.debug(`[Folder Bridge DryRun] sftp append → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] sftp append → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftp.append(this.toServerPath(normalizedPath, mount), data);
 				void this.onModify?.(normalizedPath).catch(() => { });
 				return;
 			}
 			const realPath = this.toReal(normalizedPath, mount);
 			this.assertAllowed(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] append → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] append → ${realPath}`); return; }
 			try {
 				await fs.promises.appendFile(realPath, data, 'utf8');
 				void this.onModify?.(normalizedPath).catch(() => { });
@@ -705,7 +709,7 @@ export class VirtualAdapter {
 				throw new Error(`Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'append')}`);
 			}
 		}
-		return this.orig().append(normalizedPath, data, options);
+		return this.orig().append(normalizedPath, data, options as DataWriteOptions | undefined);
 	}
 
 	async process(
@@ -721,7 +725,7 @@ export class VirtualAdapter {
 			await this.write(normalizedPath, updated, options);
 			return updated;
 		}
-		return this.orig().process(normalizedPath, fn, options);
+		return this.orig().process(normalizedPath, fn, options as DataWriteOptions | undefined);
 	}
 
 	// ------------------------------------------------------------------
@@ -800,19 +804,19 @@ export class VirtualAdapter {
 
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] mkdir (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] mkdir (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdav.mkdir(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const s3mkdir = this.getS3(mount);
 			if (s3mkdir) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] mkdir (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] mkdir (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3mkdir.mkdir(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const sftpMkdir = this.getSFTP(mount);
 			if (sftpMkdir) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] mkdir (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] mkdir (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftpMkdir.mkdir(this.toServerPath(normalizedPath, mount));
 				return;
 			}
@@ -821,7 +825,7 @@ export class VirtualAdapter {
 			this.assertNotReserved(realPath);
 
 			if (this.dryRun) {
-				console.debug(`[FolderBridge DryRun] mkdir → ${realPath}`);
+				logger.debug(`[FolderBridge DryRun] mkdir → ${realPath}`);
 				return;
 			}
 
@@ -829,7 +833,7 @@ export class VirtualAdapter {
 				await fs.promises.mkdir(realPath, { recursive: true });
 			} catch (e) {
 				const errorMsg = `Folder Bridge: ${translateFsError(e as NodeJS.ErrnoException, 'mkdir')}`;
-				console.error(`[FolderBridge] mkdir failed for "${realPath}":`, e, errorMsg);
+				logger.error(`[FolderBridge] mkdir failed for "${realPath}":`, e, errorMsg);
 				throw new Error(errorMsg);
 			}
 			return;
@@ -869,28 +873,28 @@ export class VirtualAdapter {
 			const realPath = this.toReal(normalizedPath, mount);
 			const webdavTS = this.getWebDAV(mount);
 			if (webdavTS) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashSystem (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashSystem (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
 				await webdavTS.remove(this.toServerPath(normalizedPath, mount));
 				return true;
 			}
 			const s3TS = this.getS3(mount);
 			if (s3TS) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashSystem (s3) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashSystem (s3) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
 				await s3TS.remove(this.toServerPath(normalizedPath, mount));
 				return true;
 			}
 			const sftpTS = this.getSFTP(mount);
 			if (sftpTS) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashSystem (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashSystem (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return true; }
 				await sftpTS.remove(this.toServerPath(normalizedPath, mount));
 				return true;
 			}
 			this.assertAllowed(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashSystem → ${realPath}`); return true; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashSystem → ${realPath}`); return true; }
 			try {
-				// Works in Electron renderer: window.require is Electron's require shim.
-				const { shell } = require('electron') as any;
-				await shell.trashItem(realPath);
+				const electron = loadOptionalNodeModule<{ shell?: { trashItem(p: string): Promise<string> } }>('electron');
+				const shell = electron?.shell;
+				await shell?.trashItem(realPath);
 				return true;
 			} catch {
 				// Fallback: permanent delete
@@ -915,28 +919,28 @@ export class VirtualAdapter {
 			const realPath = this.toReal(normalizedPath, mount);
 			const webdavTL = this.getWebDAV(mount);
 			if (webdavTL) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashLocal (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashLocal (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdavTL.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const s3TL = this.getS3(mount);
 			if (s3TL) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashLocal (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashLocal (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3TL.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const sftpTL = this.getSFTP(mount);
 			if (sftpTL) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashLocal (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashLocal (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftpTL.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			this.assertAllowed(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] trashLocal → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] trashLocal → ${realPath}`); return; }
 			await fs.promises.rm(realPath, { recursive: true, force: true });
 			return;
 		}
-		return this.orig().trashLocal(normalizedPath, system);
+		return (this.orig().trashLocal as (path: string, system?: boolean) => Promise<void>)(normalizedPath, system);
 	}
 
 	async rmdir(normalizedPath: string, recursive: boolean): Promise<void> {
@@ -953,24 +957,24 @@ export class VirtualAdapter {
 			const realPath = this.toReal(normalizedPath, mount);
 			const webdavRD = this.getWebDAV(mount);
 			if (webdavRD) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rmdir (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rmdir (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdavRD.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const s3RD = this.getS3(mount);
 			if (s3RD) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rmdir (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rmdir (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3RD.removePrefix(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const sftpRD = this.getSFTP(mount);
 			if (sftpRD) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rmdir (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rmdir (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftpRD.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			this.assertAllowed(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] rmdir → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rmdir → ${realPath}`); return; }
 			await fs.promises.rm(realPath, { recursive: true, force: true });
 			return;
 		}
@@ -993,24 +997,24 @@ export class VirtualAdapter {
 			const realPath = this.toReal(normalizedPath, mount);
 			const webdavRM = this.getWebDAV(mount);
 			if (webdavRM) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] remove (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] remove (webdav) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await webdavRM.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const s3RM = this.getS3(mount);
 			if (s3RM) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] remove (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] remove (s3) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await s3RM.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			const sftpRM = this.getSFTP(mount);
 			if (sftpRM) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] remove (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] remove (sftp) → ${this.toServerPath(normalizedPath, mount)}`); return; }
 				await sftpRM.remove(this.toServerPath(normalizedPath, mount));
 				return;
 			}
 			this.assertAllowed(realPath);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] remove → ${realPath}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] remove → ${realPath}`); return; }
 			await fs.promises.rm(realPath, { recursive: true, force: true });
 			return;
 		}
@@ -1050,26 +1054,26 @@ export class VirtualAdapter {
 			const dstReal = this.toReal(newNormalizedPath, dstMount);
 			const webdavRN = this.getWebDAV(srcMount);
 			if (webdavRN) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rename (webdav) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rename (webdav) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
 				await webdavRN.rename(this.toServerPath(normalizedPath, srcMount), this.toServerPath(newNormalizedPath, dstMount));
 				return;
 			}
 			const s3RN = this.getS3(srcMount);
 			if (s3RN) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rename (s3) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rename (s3) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
 				await s3RN.rename(this.toServerPath(normalizedPath, srcMount), this.toServerPath(newNormalizedPath, dstMount));
 				return;
 			}
 			const sftpRN = this.getSFTP(srcMount);
 			if (sftpRN) {
-				if (this.dryRun) { console.debug(`[FolderBridge DryRun] rename (sftp) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
+				if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rename (sftp) ${this.toServerPath(normalizedPath, srcMount)} → ${this.toServerPath(newNormalizedPath, dstMount)}`); return; }
 				await sftpRN.rename(this.toServerPath(normalizedPath, srcMount), this.toServerPath(newNormalizedPath, dstMount));
 				return;
 			}
 			this.assertAllowed(srcReal);
 			this.assertAllowed(dstReal);
 			this.assertNotReserved(dstReal);
-			if (this.dryRun) { console.debug(`[FolderBridge DryRun] rename ${srcReal} → ${dstReal}`); return; }
+			if (this.dryRun) { logger.debug(`[FolderBridge DryRun] rename ${srcReal} → ${dstReal}`); return; }
 			await fs.promises.mkdir(path.dirname(dstReal), { recursive: true });
 
 			// Wait for srcReal to materialise before attempting the rename.
@@ -1151,7 +1155,7 @@ export class VirtualAdapter {
 		if (this.dryRun) {
 			const srcDesc = srcMount ? this.pathMapper.toRealPath(normalizedPath, srcMount) : normalizedPath;
 			const dstDesc = dstMount ? this.pathMapper.toRealPath(newNormalizedPath, dstMount) : newNormalizedPath;
-			console.debug(`[FolderBridge DryRun] copy ${srcDesc} → ${dstDesc}`);
+			logger.debug(`[FolderBridge DryRun] copy ${srcDesc} → ${dstDesc}`);
 			return;
 		}
 

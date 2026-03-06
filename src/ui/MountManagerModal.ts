@@ -2,9 +2,23 @@ import { App, Modal, Notice, Platform, Setting, SuggestModal, TFolder, TextCompo
 import { MountPoint, MountStatus, MountType } from '../types';
 import { SecurityManager } from '../SecurityManager';
 import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpers';
+import { logger } from '../logger';
+import { getRuntimeRequire, loadOptionalNodeModule } from '../runtimeNode';
 
 // Lazy-loaded — unavailable on Obsidian Mobile (Capacitor).
-const path: typeof import('path') = (() => { try { return (require as any)('path'); } catch { return null as never; } })();
+const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
+
+/** Minimal interface for Electron's dialog module. */
+interface ElectronDialog {
+	showOpenDialog(options: ElectronOpenDialogOptions): Promise<{ canceled: boolean; filePaths: string[] }>;
+}
+
+/** Options for Electron's dialog.showOpenDialog. */
+interface ElectronOpenDialogOptions {
+	properties: string[];
+	title?: string;
+	defaultPath?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Electron folder-picker helper
@@ -15,19 +29,18 @@ const path: typeof import('path') = (() => { try { return (require as any)('path
  * Returns the selected absolute path, or null if the user cancelled or the
  * Electron remote API is unavailable in the current host environment.
  */
-export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: string): Promise<string | null> {
+export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: string): Promise<string | null> {
 	try {
-		// `electron` is declared external in esbuild so require() resolves to
-		// the host Electron bundle, not a Node module.
-		const electron = (window as any).require?.('electron') ?? require('electron');
+		const runtimeRequire = getRuntimeRequire();
+		const electron = runtimeRequire?.('electron');
 		// Electron ≥ 14 ships remote via @electron/remote; Obsidian re-exports
 		// it on the electron object so both old and new versions work here.
-		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
+		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
-		const options: any = {
+		const options: ElectronOpenDialogOptions = {
 			properties: ['openDirectory'],
 			title,
 		};
@@ -36,9 +49,9 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
 		}
 		const result = await dialog.showOpenDialog(options);
 		if (result.canceled || !result.filePaths?.length) return null;
-		return result.filePaths[0] as string;
+		return result.filePaths[0];
 	} catch (err) {
-		console.error('Folder Bridge: Electron dialog error', err);
+		logger.error('Folder Bridge: Electron dialog error', err);
 		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
@@ -49,15 +62,16 @@ export async function browseFolderOnDisk(title = 'Select Folder', defaultPath?: 
  * Returns the array of selected absolute paths, or null if the user cancelled
  * or the Electron remote API is unavailable.
  */
-export async function browseMultipleFoldersOnDisk(title = 'Select Folders', defaultPath?: string): Promise<string[] | null> {
+export async function browseMultipleFoldersOnDisk(title = 'Select folders', defaultPath?: string): Promise<string[] | null> {
 	try {
-		const electron = (window as any).require?.('electron') ?? require('electron');
-		const dialog: any = electron?.remote?.dialog ?? electron?.dialog;
+		const runtimeRequire = getRuntimeRequire();
+		const electron = runtimeRequire?.('electron');
+		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
-		const options: any = {
+		const options: ElectronOpenDialogOptions = {
 			properties: ['openDirectory', 'multiSelections'],
 			title,
 		};
@@ -66,9 +80,9 @@ export async function browseMultipleFoldersOnDisk(title = 'Select Folders', defa
 		}
 		const result = await dialog.showOpenDialog(options);
 		if (result.canceled || !result.filePaths?.length) return null;
-		return result.filePaths as string[];
+		return result.filePaths;
 	} catch (err) {
-		console.error('Folder Bridge: Electron dialog error', err);
+		logger.error('Folder Bridge: Electron dialog error', err);
 		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
@@ -84,10 +98,10 @@ export async function browseMultipleFoldersOnDisk(title = 'Select Folders', defa
  * virtual parent path, rather than having to type it from memory.
  */
 export class VaultFolderPickerModal extends SuggestModal<string> {
-	private onChoose: (folderPath: string) => void;
+	private onChoose: (folderPath: string) => void | Promise<void>;
 	private folders: string[];
 
-	constructor(app: App, onChoose: (folderPath: string) => void) {
+	constructor(app: App, onChoose: (folderPath: string) => void | Promise<void>) {
 		super(app);
 		this.onChoose = onChoose;
 		this.setPlaceholder('Type to search vault folders… (Enter on blank line = vault root)');
@@ -312,7 +326,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('Absolute path to the root of the other Obsidian vault')
 			.addText(text => {
 				vaultPathText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder(platform === 'windows' ? 'C:\\Users\\YourName\\MyOtherVault' : '/home/yourname/MyOtherVault')
 					.setValue(this.mountType === 'vault' ? this.realPath : '')
 					.onChange(val => {
@@ -323,13 +337,15 @@ export class MountManagerModal extends Modal {
 			.addButton(btn => {
 				btn.setButtonText('Browse…')
 					.setTooltip('Open the system folder picker')
-					.onClick(async () => {
-						const selected = await browseFolderOnDisk('Select Other Vault Root');
-						if (selected) {
-							this.realPath = selected;
-							vaultPathText?.setValue(selected);
-							this.syncAutoLabel();
-						}
+					.onClick(() => {
+						void (async () => {
+							const selected = await browseFolderOnDisk('Select other vault root');
+							if (selected) {
+								this.realPath = selected;
+								vaultPathText?.setValue(selected);
+								this.syncAutoLabel();
+							}
+						})();
 					});
 			});
 
@@ -366,10 +382,7 @@ export class MountManagerModal extends Modal {
 							this.webdavUrl = preset.urlTemplate;
 						}
 						if (!presetNoteEl) {
-							presetNoteEl = webdavSection.createEl('p', { cls: 'setting-item-description' });
-							presetNoteEl.style.marginTop = '-4px';
-							presetNoteEl.style.marginBottom = '8px';
-							presetNoteEl.style.color = 'var(--text-accent)';
+							presetNoteEl = webdavSection.createEl('p', { cls: 'folderbridge-preset-note' });
 						}
 						presetNoteEl.setText('💡 ' + preset.note);
 					});
@@ -381,7 +394,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('Full URL to the WebDAV endpoint, e.g. https://cloud.example.com/remote.php/dav/files/username')
 			.addText(text => {
 				webdavUrlText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('https://cloud.example.com/remote.php/dav/files/username')
 					.setValue(this.webdavUrl)
 					.onChange(val => { this.webdavUrl = val.trim(); });
@@ -391,7 +404,7 @@ export class MountManagerModal extends Modal {
 			.setName('Remote base path')
 			.setDesc('Path on the WebDAV server to use as the mount root, e.g. / or /Documents. Use / for the server root.')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('/')
 					.setValue(this.mountType === 'webdav' ? (this.realPath || '/') : '/')
 					.onChange(val => { this.realPath = val.trim() || '/'; });
@@ -400,7 +413,7 @@ export class MountManagerModal extends Modal {
 		new Setting(webdavSection)
 			.setName('Username')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('your-username')
 					.setValue(this.webdavUsername)
 					.onChange(val => { this.webdavUsername = val.trim(); });
@@ -415,7 +428,7 @@ export class MountManagerModal extends Modal {
 				: 'Encrypted and saved on this device — survives Obsidian restarts.')
 			.addText(text => {
 				text.inputEl.type = 'password';
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				const hasStored = !!(this.editMount?.encryptedWebdavPassword);
 				text.setPlaceholder(hasStored ? '(saved — leave blank to keep)' : this.editMount?.mountType === 'webdav' ? '(unchanged)' : 'password')
 					.setValue('')
@@ -463,10 +476,7 @@ export class MountManagerModal extends Modal {
 						s3EndpointText?.setValue(preset.endpoint);
 						s3PathStyleToggle?.setValue(preset.forcePathStyle);
 						if (!s3PresetNoteEl) {
-							s3PresetNoteEl = s3Section.createEl('p', { cls: 'setting-item-description' });
-							s3PresetNoteEl.style.marginTop = '-4px';
-							s3PresetNoteEl.style.marginBottom = '8px';
-							s3PresetNoteEl.style.color = 'var(--text-accent)';
+							s3PresetNoteEl = s3Section.createEl('p', { cls: 'folderbridge-preset-note' });
 						}
 						s3PresetNoteEl.setText(preset.note);
 					});
@@ -477,7 +487,7 @@ export class MountManagerModal extends Modal {
 			.setName('Bucket name')
 			.setDesc('The S3 bucket or B2 bucket name (case-sensitive)')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('my-obsidian-bucket')
 					.setValue(this.s3Bucket)
 					.onChange(val => { this.s3Bucket = val.trim(); });
@@ -488,7 +498,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('AWS region (e.g. us-east-1) or B2 region string (e.g. us-west-004)')
 			.addText(text => {
 				s3RegionText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('us-east-1')
 					.setValue(this.s3Region)
 					.onChange(val => { this.s3Region = val.trim(); });
@@ -499,7 +509,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('Leave empty for AWS S3. For Backblaze B2 set to your region endpoint, e.g. https://s3.us-west-004.backblazeb2.com')
 			.addText(text => {
 				s3EndpointText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('https://s3.us-west-004.backblazeb2.com  (leave blank for AWS)')
 					.setValue(this.s3Endpoint)
 					.onChange(val => { this.s3Endpoint = val.trim(); });
@@ -509,7 +519,7 @@ export class MountManagerModal extends Modal {
 			.setName('Key prefix / path')
 			.setDesc('Optional folder prefix inside the bucket to use as the mount root, e.g. / for bucket root or /notes/ for a sub-folder.')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('/')
 					.setValue(this.s3Prefix)
 					.onChange(val => { this.s3Prefix = val.trim() || '/'; });
@@ -519,7 +529,7 @@ export class MountManagerModal extends Modal {
 			.setName('Access key ID')
 			.setDesc('IAM Access Key ID (AWS) or Application Key ID (Backblaze B2)')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('AKIAIOSFODNN7EXAMPLE')
 					.setValue(this.s3AccessKeyId)
 					.onChange(val => { this.s3AccessKeyId = val.trim(); });
@@ -534,7 +544,7 @@ export class MountManagerModal extends Modal {
 				: 'Encrypted and saved on this device — survives Obsidian restarts.')
 			.addText(text => {
 				text.inputEl.type = 'password';
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				const hasStored = !!(this.editMount?.encryptedS3SecretKey);
 				text.setPlaceholder(hasStored ? '(saved — leave blank to keep)' : 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY')
 					.setValue('')
@@ -562,7 +572,7 @@ export class MountManagerModal extends Modal {
 			.setName('Host')
 			.setDesc('Hostname or IP address of the SFTP server')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('files.example.com')
 					.setValue(this.sftpHost)
 					.onChange(val => { this.sftpHost = val.trim(); });
@@ -573,7 +583,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('SSH port (default 22)')
 			.addText(text => {
 				text.inputEl.type = 'number';
-				text.inputEl.style.width = '80px';
+				text.inputEl.addClass('folderbridge-input-narrow');
 				text.setPlaceholder('22')
 					.setValue(String(this.sftpPort))
 					.onChange(val => {
@@ -585,7 +595,7 @@ export class MountManagerModal extends Modal {
 		new Setting(sftpSection)
 			.setName('Username')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('alice')
 					.setValue(this.sftpUsername)
 					.onChange(val => { this.sftpUsername = val.trim(); });
@@ -595,7 +605,7 @@ export class MountManagerModal extends Modal {
 			.setName('Remote base path')
 			.setDesc('Absolute path on the remote server to use as the mount root, e.g. /home/alice/notes')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('/home/alice/notes')
 					.setValue(this.mountType === 'sftp' ? (this.realPath || '/home') : '/home')
 					.onChange(val => { this.realPath = val.trim() || '/'; });
@@ -610,7 +620,7 @@ export class MountManagerModal extends Modal {
 				: 'Used for password authentication. Leave blank if using a private key below.')
 			.addText(text => {
 				text.inputEl.type = 'password';
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				const hasStored = !!(this.editMount?.encryptedSftpPassword);
 				text.setPlaceholder(hasStored ? '(saved — leave blank to keep)' : 'password (or leave blank for key auth)')
 					.setValue('')
@@ -621,7 +631,7 @@ export class MountManagerModal extends Modal {
 			.setName('Private key file path (optional)')
 			.setDesc('Absolute path to your SSH private key file on this device, e.g. /home/alice/.ssh/id_ed25519. Leave blank for password auth.')
 			.addText(text => {
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('/home/yourname/.ssh/id_ed25519')
 					.setValue(this.sftpPrivateKeyPath)
 					.onChange(val => { this.sftpPrivateKeyPath = val.trim(); });
@@ -636,7 +646,7 @@ export class MountManagerModal extends Modal {
 				: 'Only needed if your private key is passphrase-protected.')
 			.addText(text => {
 				text.inputEl.type = 'password';
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				const hasStored = !!(this.editMount?.encryptedSftpPassphrase);
 				text.setPlaceholder(hasStored ? '(saved — leave blank to keep)' : 'passphrase (if key is encrypted)')
 					.setValue('')
@@ -662,7 +672,7 @@ export class MountManagerModal extends Modal {
 			.setDesc('Absolute path to the external folder you want to mount')
 			.addText(text => {
 				this.realPathText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder(realPlaceholder)
 					.setValue(this.realPath)
 					.onChange(val => {
@@ -673,13 +683,15 @@ export class MountManagerModal extends Modal {
 			.addButton(btn => {
 				btn.setButtonText('Browse…')
 					.setTooltip('Open the system folder picker')
-					.onClick(async () => {
-						const selected = await browseFolderOnDisk('Select External Folder');
-						if (selected) {
-							this.realPath = selected;
-							this.realPathText?.setValue(selected);
-							this.syncAutoLabel();
-						}
+					.onClick(() => {
+						void (async () => {
+							const selected = await browseFolderOnDisk('Select external folder');
+							if (selected) {
+								this.realPath = selected;
+								this.realPathText?.setValue(selected);
+								this.syncAutoLabel();
+							}
+						})();
 					});
 				btn.buttonEl.setAttribute('aria-label', 'Browse for folder on disk');
 			});
@@ -688,13 +700,15 @@ export class MountManagerModal extends Modal {
 			realPathSetting.addButton(btn => {
 				btn.setButtonText('Browse WSL…')
 					.setTooltip('Open the system folder picker directly to your WSL Linux distributions')
-					.onClick(async () => {
-						const selected = await browseFolderOnDisk('Select WSL Folder', '\\\\wsl.localhost');
-						if (selected) {
-							this.realPath = selected;
-							this.realPathText?.setValue(selected);
-							this.syncAutoLabel();
-						}
+					.onClick(() => {
+						void (async () => {
+							const selected = await browseFolderOnDisk('Select WSL folder', '\\\\wsl.localhost');
+							if (selected) {
+								this.realPath = selected;
+								this.realPathText?.setValue(selected);
+								this.syncAutoLabel();
+							}
+						})();
 					});
 				btn.buttonEl.setAttribute('aria-label', 'Browse for WSL folder');
 			});
@@ -729,7 +743,7 @@ export class MountManagerModal extends Modal {
 			)
 			.addText(text => {
 				this.virtualPathText = text;
-				text.inputEl.style.flex = '1';
+				text.inputEl.addClass('folderbridge-input-flex');
 				text.setPlaceholder('Projects/Work')
 					.setValue(this.virtualPath)
 					.onChange(val => { this.virtualPath = val.trim(); });
@@ -824,7 +838,7 @@ export class MountManagerModal extends Modal {
 
 		const showHidePollingInterval = (show: boolean) => {
 			if (pollingIntervalSetting) {
-				pollingIntervalSetting.settingEl.style.display = show ? '' : 'none';
+				pollingIntervalSetting.settingEl.classList.toggle('folderbridge-hidden', !show);
 			}
 		};
 
@@ -902,9 +916,14 @@ export class MountManagerModal extends Modal {
 		// ── Action buttons ─────────────────────────────────────────────────
 		new Setting(contentEl)
 			.addButton(btn => btn
-				.setButtonText(this.editMount ? 'Save changes' : 'Validate & add')
+				.setButtonText(this.editMount ? 'Save changes' : 'Validate and add')
 				.setCta()
-				.onClick(() => { this.handleSave().catch(console.error); }))
+				.onClick(() => {
+					void this.handleSave().catch(err => {
+						logger.error('Folder Bridge: Failed to save mount', err);
+						new Notice('Folder Bridge: Failed to save mount. Check the developer console for details.');
+					});
+				}))
 			.addButton(btn => btn
 				.setButtonText('Cancel')
 				.onClick(() => this.close()));

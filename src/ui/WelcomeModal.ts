@@ -24,10 +24,10 @@ export class WelcomeModal extends Modal {
         const descEl = contentEl.createDiv({ cls: 'folderbridge-welcome-desc' });
 
         descEl.createEl('p', {
-            text: 'Folder Bridge extends Obsidian\'s single-root vault by letting you mount external folders as seamless, native-feeling directories — no copying, no duplicating, no symlinks required.',
+            text: 'Folder Bridge lets you mount external folders into your vault as seamless, native-feeling directories, with no copying, duplication, or symlinks required.',
         }).addClass('folderbridge-welcome-intro');
 
-        descEl.createEl('p', { text: 'What you can mount:' }).addClass('folderbridge-welcome-intro');
+        descEl.createEl('p', { text: 'What you can mount' }).addClass('folderbridge-welcome-intro');
 
         const list = descEl.createEl('ul', { cls: 'folderbridge-feature-list' });
         for (const item of [
@@ -51,7 +51,7 @@ export class WelcomeModal extends Modal {
 
         new Setting(contentEl)
             .addButton(btn => btn
-                .setButtonText('Add my first mount →')
+                .setButtonText('Add my first mount')
                 .setCta()
                 .onClick(() => {
                     this.close();

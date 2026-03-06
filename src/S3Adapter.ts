@@ -1,6 +1,8 @@
 import { normalizePath } from 'obsidian';
 import { MountPoint } from './types';
 import { loadSessionCredential } from './CredentialStore';
+import { logger } from './logger';
+import { loadOptionalNodeModule } from './runtimeNode';
 
 /**
  * S3Adapter wraps the AWS SDK v3 S3 client and exposes the same surface area
@@ -29,11 +31,54 @@ import { loadSessionCredential } from './CredentialStore';
 // Lazy AWS SDK loader — isolates heavy imports from mobile / initial load
 // ---------------------------------------------------------------------------
 
-type AWSModule = any;
-type S3ClientConfig = any;
+/** Minimal interface for the lazy-loaded @aws-sdk/client-s3 module. */
+interface S3AwsModule {
+    S3Client: new (cfg: S3Config) => S3ClientInstance;
+    PutObjectCommand: new (input: object) => object;
+    GetObjectCommand: new (input: object) => object;
+    HeadObjectCommand: new (input: object) => object;
+    DeleteObjectCommand: new (input: object) => object;
+    DeleteObjectsCommand: new (input: object) => object;
+    CopyObjectCommand: new (input: object) => object;
+    ListObjectsV2Command: new (input: object) => object;
+}
 
-function loadAWS(): AWSModule {
-    return (require as any)('@aws-sdk/client-s3');
+/** Minimal S3 client configuration. */
+interface S3Config {
+    region: string;
+    credentials: { accessKeyId: string; secretAccessKey: string };
+    endpoint?: string;
+    forcePathStyle?: boolean;
+}
+
+/** Minimal interface for the initialized S3Client instance. */
+interface S3ClientInstance {
+    send(command: object): Promise<S3SendResult>;
+    destroy?(): void;
+}
+
+/** Body stream returned by GetObjectCommand; extends AsyncIterable for for-await enumeration. */
+interface S3ResponseBody extends AsyncIterable<Buffer | Uint8Array> {
+    transformToByteArray?(): Promise<Uint8Array>;
+    transformToString?(encoding: string): Promise<string>;
+}
+
+/** Union of all S3 response shapes returned by send() in this adapter. */
+interface S3SendResult {
+    Contents?: Array<{ Key?: string }>;
+    CommonPrefixes?: Array<{ Prefix?: string }>;
+    IsTruncated?: boolean;
+    NextContinuationToken?: string;
+    KeyCount?: number;
+    LastModified?: Date;
+    ContentLength?: number;
+    Body?: S3ResponseBody;
+}
+
+function loadAWS(): S3AwsModule {
+    const awsModule = loadOptionalNodeModule<S3AwsModule>('@aws-sdk/client-s3');
+    if (!awsModule) throw new Error('@aws-sdk/client-s3 is unavailable in this environment');
+    return awsModule;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +98,7 @@ export interface S3StatResult {
 
 export class S3Adapter {
     // The client instance created in the constructor
-    private client: any;
+    private client: S3ClientInstance;
     private bucket: string;
     /** Normalized key prefix for this mount, always ending with "/" (or empty for bucket root). */
     private prefix: string;
@@ -73,7 +118,7 @@ export class S3Adapter {
         // Normalize prefix: strip leading slash, ensure trailing slash
         this.prefix = '';
 
-        const cfg: S3ClientConfig = {
+        const cfg: S3Config = {
             region,
             credentials: { accessKeyId, secretAccessKey },
         };
@@ -272,7 +317,7 @@ export class S3Adapter {
                     MaxKeys: 1000,
                     ContinuationToken: continuationToken,
                 });
-                const resp: any = await this.client.send(cmd);
+                const resp = await this.client.send(cmd);
 
                 // Files — direct object keys under this prefix
                 for (const obj of resp.Contents ?? []) {
@@ -303,7 +348,7 @@ export class S3Adapter {
                 continuationToken = resp.IsTruncated ? resp.NextContinuationToken : undefined;
             } while (continuationToken);
         } catch (e) {
-            console.error(`[Folder Bridge] S3 list failed for "${serverPath}":`, e);
+            logger.error(`[Folder Bridge] S3 list failed for "${serverPath}":`, e);
         }
 
         return { files, folders };
@@ -331,20 +376,22 @@ export class S3Adapter {
         const key = this.toKey(serverPath);
         const cmd = new aws.GetObjectCommand({ Bucket: this.bucket, Key: key });
         const resp = await this.client.send(cmd);
+        const body = resp.Body;
+        if (!body) return '';
         // AWS SDK v3 Body is a Readable stream (Node) or ReadableStream (browser)
-        if (typeof resp.Body?.transformToString === 'function') {
-            return await resp.Body.transformToString('utf-8');
+        if (typeof body.transformToString === 'function') {
+            return await body.transformToString('utf-8');
         }
         // Node.js Readable fallback
         const chunks: Buffer[] = [];
-        for await (const chunk of resp.Body) {
+        for await (const chunk of body) {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
         }
         return Buffer.concat(chunks).toString('utf-8');
     }
 
     private async streamToArrayBuffer(body: unknown): Promise<ArrayBuffer> {
-        const b = body as any;
+        const b = body as S3ResponseBody;
         if (typeof b?.transformToByteArray === 'function') {
             const arr = await b.transformToByteArray();
             return arr.buffer as ArrayBuffer;
@@ -354,7 +401,7 @@ export class S3Adapter {
             chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
         }
         const buf = Buffer.concat(chunks);
-        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     }
 
     // ------------------------------------------------------------------
@@ -451,8 +498,8 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            const resp: any = await this.client.send(listCmd);
-            const keys: string[] = (resp.Contents ?? []).map((o: { Key?: string }) => o.Key).filter(Boolean);
+            const resp = await this.client.send(listCmd);
+            const keys = (resp.Contents ?? []).map((o: { Key?: string }) => o.Key).filter(Boolean) as string[];
 
             if (keys.length > 0) {
                 const delCmd = new aws.DeleteObjectsCommand({
@@ -507,7 +554,7 @@ export class S3Adapter {
                 MaxKeys: 1000,
                 ContinuationToken: continuationToken,
             });
-            const resp: any = await this.client.send(listCmd);
+            const resp = await this.client.send(listCmd);
 
             for (const obj of resp.Contents ?? []) {
                 const srcKey: string = obj.Key ?? '';
@@ -528,12 +575,14 @@ export class S3Adapter {
     // Helpers
     // ------------------------------------------------------------------
 
-    private isNotFound(err: any): boolean {
+    private isNotFound(err: unknown): boolean {
+        if (typeof err !== 'object' || err === null) return false;
+        const e = err as { $metadata?: { httpStatusCode?: number }; name?: string; Code?: string };
         return (
-            err?.$metadata?.httpStatusCode === 404 ||
-            err?.name === 'NoSuchKey' ||
-            err?.Code === 'NoSuchKey' ||
-            err?.name === 'NotFound'
+            e.$metadata?.httpStatusCode === 404 ||
+            e.name === 'NoSuchKey' ||
+            e.Code === 'NoSuchKey' ||
+            e.name === 'NotFound'
         );
     }
 }

@@ -1,3 +1,5 @@
+import { getRuntimeRequire } from './runtimeNode';
+
 /**
  * CredentialStore — persist secrets using Electron's safeStorage API.
  *
@@ -39,8 +41,8 @@ type SafeStorage = {
 
 function getSafeStorage(): SafeStorage | null {
     try {
-        // Works in Electron renderer: window.require is Electron's require shim.
-        const electron = (window as any).require?.('electron') ?? (require as any)('electron');
+        const runtimeRequire = getRuntimeRequire();
+        const electron = runtimeRequire?.('electron');
         // safeStorage lives in the main process; Obsidian re-exports it via remote.
         const ss: SafeStorage | undefined =
             electron?.remote?.safeStorage ?? electron?.safeStorage;

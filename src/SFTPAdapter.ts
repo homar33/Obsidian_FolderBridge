@@ -1,6 +1,8 @@
 import { normalizePath } from 'obsidian';
 import { MountPoint } from './types';
 import { loadSessionCredential, decryptCredential } from './CredentialStore';
+import { logger } from './logger';
+import { loadOptionalNodeModule } from './runtimeNode';
 
 /**
  * SFTPAdapter wraps the `ssh2-sftp-client` library to provide the same
@@ -31,8 +33,37 @@ import { loadSessionCredential, decryptCredential } from './CredentialStore';
 // Lazy loader — prevents pulling in Node.js net/crypto at bundle load time
 // ---------------------------------------------------------------------------
 
-function loadSFTPClient(): any {
-    return (require as any)('ssh2-sftp-client');
+/** Minimal interface for the ssh2-sftp-client instance we use. */
+interface SFTPClientInstance {
+    connect(options: SFTPConnectOptions): Promise<void>;
+    list(path: string): Promise<Array<{ type: string; name: string; modifyTime: number; size: number }>>;
+    stat(path: string): Promise<{ isDirectory: boolean; modifyTime: number; size: number; mode?: number; atime?: number; mtime?: number }>;
+    get(path: string): Promise<Buffer>;
+    put(input: string | Buffer, path: string): Promise<void>;
+    append(input: string | Buffer, path: string): Promise<void>;
+    mkdir(path: string, recursive?: boolean): Promise<void>;
+    rmdir(path: string, recursive?: boolean): Promise<void>;
+    delete(path: string): Promise<void>;
+    rename(src: string, dst: string): Promise<void>;
+    exists(path: string): Promise<false | string>;
+    end(): Promise<void>;
+    sftp?: unknown;
+}
+
+/** Options accepted by SFTPClientInstance.connect(). */
+interface SFTPConnectOptions {
+    host: string;
+    port: number;
+    username: string;
+    password?: string;
+    privateKey?: Buffer;
+    passphrase?: string;
+}
+
+function loadSFTPClient(): new () => SFTPClientInstance {
+    const sftpClient = loadOptionalNodeModule<new () => SFTPClientInstance>('ssh2-sftp-client');
+    if (!sftpClient) throw new Error('ssh2-sftp-client is unavailable in this environment');
+    return sftpClient;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +90,7 @@ export class SFTPAdapter {
     private passphrase?: string;
 
     // The sftp client instance; recreated on connect
-    private sftp: any = null;
+    private sftp: SFTPClientInstance | null = null;
     /** In-flight connect promise — all concurrent callers await the same one. */
     private connectingPromise: Promise<void> | null = null;
 
@@ -138,14 +169,15 @@ export class SFTPAdapter {
         const SFTPClient = loadSFTPClient();
         const client = new SFTPClient();
 
-        const connectOptions: any = {
+        const connectOptions: SFTPConnectOptions = {
             host: this.host,
             port: this.port,
             username: this.username,
         };
 
         if (this.privateKeyPath) {
-            const fs = (require as any)('fs');
+            const fs = loadOptionalNodeModule<typeof import('fs')>('fs');
+            if (!fs) throw new Error('fs is unavailable in this environment');
             connectOptions.privateKey = fs.readFileSync(this.privateKeyPath);
             if (this.passphrase) connectOptions.passphrase = this.passphrase;
         } else if (this.password) {
@@ -168,7 +200,7 @@ export class SFTPAdapter {
     async disconnect(): Promise<void> {
         if (this.sftp) {
             try {
-                await this.sftp.end();
+                await this.sftp!.end();
             } catch { /* ignore */ }
             this.sftp = null;
         }
@@ -209,7 +241,7 @@ export class SFTPAdapter {
     async exists(serverPath: string): Promise<boolean> {
         await this.connect();
         try {
-            const stat = await this.sftp.stat(this.toRemotePath(serverPath));
+            const stat = await this.sftp!.stat(this.toRemotePath(serverPath));
             return !!stat;
         } catch {
             return false;
@@ -223,11 +255,11 @@ export class SFTPAdapter {
     async stat(serverPath: string): Promise<SFTPStatResult | null> {
         await this.connect();
         try {
-            const info = await this.sftp.stat(this.toRemotePath(serverPath));
+            const info = await this.sftp!.stat(this.toRemotePath(serverPath));
             return {
-                type: typeof info.isDirectory === 'function'
-                    ? (info.isDirectory() ? 'folder' : 'file')
-                    : (info.mode & 0o040000 ? 'folder' : 'file'),
+                type: info.mode !== undefined
+                    ? (info.mode & 0o040000 ? 'folder' : 'file')
+                    : (info.isDirectory ? 'folder' : 'file'),
                 ctime: info.atime ? info.atime * 1000 : 0,
                 mtime: info.mtime ? info.mtime * 1000 : 0,
                 size: info.size ?? 0,
@@ -250,7 +282,7 @@ export class SFTPAdapter {
         const folders: string[] = [];
         await this.connect();
         try {
-            const entries = await this.sftp.list(this.toRemotePath(serverPath));
+            const entries = await this.sftp!.list(this.toRemotePath(serverPath));
             for (const entry of entries) {
                 const name: string = entry.name;
                 if (name === '.' || name === '..') continue;
@@ -265,7 +297,7 @@ export class SFTPAdapter {
                 }
             }
         } catch (e) {
-            console.error(`[Folder Bridge] SFTP list failed for "${serverPath}":`, e);
+            logger.error(`[Folder Bridge] SFTP list failed for "${serverPath}":`, e);
         }
         return { files, folders };
     }
@@ -276,14 +308,14 @@ export class SFTPAdapter {
 
     async readText(serverPath: string): Promise<string> {
         await this.connect();
-        const buf: Buffer = await this.sftp.get(this.toRemotePath(serverPath));
+        const buf: Buffer = await this.sftp!.get(this.toRemotePath(serverPath));
         return buf.toString('utf-8');
     }
 
     async readBinary(serverPath: string): Promise<ArrayBuffer> {
         await this.connect();
-        const buf: Buffer = await this.sftp.get(this.toRemotePath(serverPath));
-        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+        const buf: Buffer = await this.sftp!.get(this.toRemotePath(serverPath));
+        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     }
 
     // ------------------------------------------------------------------
@@ -292,12 +324,12 @@ export class SFTPAdapter {
 
     async writeText(serverPath: string, data: string): Promise<void> {
         await this.connect();
-        await this.sftp.put(Buffer.from(data, 'utf-8'), this.toRemotePath(serverPath));
+        await this.sftp!.put(Buffer.from(data, 'utf-8'), this.toRemotePath(serverPath));
     }
 
     async writeBinary(serverPath: string, data: ArrayBuffer): Promise<void> {
         await this.connect();
-        await this.sftp.put(Buffer.from(data), this.toRemotePath(serverPath));
+        await this.sftp!.put(Buffer.from(data), this.toRemotePath(serverPath));
     }
 
     async append(serverPath: string, data: string): Promise<void> {
@@ -314,7 +346,7 @@ export class SFTPAdapter {
 
     async mkdir(serverPath: string): Promise<void> {
         await this.connect();
-        await this.sftp.mkdir(this.toRemotePath(serverPath), true); // recursive
+        await this.sftp!.mkdir(this.toRemotePath(serverPath), true); // recursive
     }
 
     // ------------------------------------------------------------------
@@ -326,13 +358,9 @@ export class SFTPAdapter {
         const remotePath = this.toRemotePath(serverPath);
         // Try file delete first; fall back to rmdir for directories
         try {
-            await this.sftp.delete(remotePath);
+            await this.sftp!.delete(remotePath);
         } catch {
-            try {
-                await this.sftp.rmdir(remotePath, true); // recursive
-            } catch (e) {
-                throw e;
-            }
+            await this.sftp!.rmdir(remotePath, true); // recursive
         }
     }
 
@@ -342,7 +370,7 @@ export class SFTPAdapter {
 
     async rename(srcServerPath: string, dstServerPath: string): Promise<void> {
         await this.connect();
-        await this.sftp.rename(
+        await this.sftp!.rename(
             this.toRemotePath(srcServerPath),
             this.toRemotePath(dstServerPath)
         );

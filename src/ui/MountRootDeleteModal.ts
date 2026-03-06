@@ -1,11 +1,11 @@
 import { App, Modal, Setting } from 'obsidian';
 
 export class MountRootDeleteModal extends Modal {
-    private resolve: (value: 'unmount' | 'delete' | 'unmount-always' | 'delete-always' | 'cancel') => void;
+    private resolve: (value: 'unmount' | 'delete' | 'unmount-always' | 'delete-always' | 'cancel') => void | Promise<void>;
     private dontAskAgain = false;
     private resolved = false;
 
-    constructor(app: App, private mountPath: string, resolve: (value: 'unmount' | 'delete' | 'unmount-always' | 'delete-always' | 'cancel') => void) {
+    constructor(app: App, private mountPath: string, resolve: (value: 'unmount' | 'delete' | 'unmount-always' | 'delete-always' | 'cancel') => void | Promise<void>) {
         super(app);
         this.resolve = resolve;
     }
@@ -13,14 +13,14 @@ export class MountRootDeleteModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl('h2', { text: 'Delete mounted folder' });
+        contentEl.createEl('h2', { text: 'Remove mounted folder' });
 
         contentEl.createEl('p', {
-            text: `You are attempting to delete the mounted folder root "${this.mountPath}".`
+            text: `You are about to remove the mounted folder root "${this.mountPath}".`
         });
 
         contentEl.createEl('p', {
-            text: `Do you want to permanently delete the real folder on your hard drive, or just unmount it from Obsidian?`
+            text: 'Do you want to permanently delete the real folder on disk, or just unmount it from Obsidian?'
         });
 
         new Setting(contentEl)
@@ -52,7 +52,7 @@ export class MountRootDeleteModal extends Modal {
             }
         };
 
-        const btnDelete = buttonContainer.createEl('button', { text: 'Delete permanently', cls: 'mod-warning' });
+        const btnDelete = buttonContainer.createEl('button', { text: 'Delete real folder', cls: 'mod-warning' });
         btnDelete.onclick = () => {
             if (!this.resolved) {
                 this.resolved = true;

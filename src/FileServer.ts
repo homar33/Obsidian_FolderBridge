@@ -1,3 +1,6 @@
+import { loadOptionalNodeModule } from './runtimeNode';
+import { logger } from './logger';
+
 /**
  * FileServer — minimal localhost HTTP server for streaming files from local mounts.
  *
@@ -35,9 +38,9 @@
  */
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
-const httpMod: typeof import('http') | null = (() => { try { return (require as any)('http'); } catch { return null; } })();
-const fsMod: typeof import('fs') | null = (() => { try { return (require as any)('fs'); } catch { return null; } })();
-const pathMod: typeof import('path') | null = (() => { try { return (require as any)('path'); } catch { return null; } })();
+const httpMod: typeof import('http') | null = loadOptionalNodeModule<typeof import('http')>('http');
+const fsMod: typeof import('fs') | null = loadOptionalNodeModule<typeof import('fs')>('fs');
+const pathMod: typeof import('path') | null = loadOptionalNodeModule<typeof import('path')>('path');
 
 // Import the single-source-of-truth MIME tables from OSHelpers so this file
 // never maintains its own independent copy.
@@ -71,12 +74,12 @@ export class FileServer {
         this.token = this.generateToken();
 
         return new Promise<boolean>((resolve, reject) => {
-            const srv = httpMod!.createServer((req, res) => {
+            const srv = httpMod.createServer((req, res) => {
                 this.handleRequest(req, res);
             });
 
             srv.on('error', (err) => {
-                console.error('[FolderBridge] FileServer failed to start:', err);
+                logger.error('[FolderBridge] FileServer failed to start:', err);
                 reject(err);
             });
 
@@ -86,7 +89,7 @@ export class FileServer {
                 if (!addr) { srv.close(); reject(new Error('FileServer: address() returned null')); return; }
                 this.port = addr.port;
                 this.server = srv;
-                console.debug(`[FolderBridge] FileServer listening on 127.0.0.1:${this.port}`);
+                logger.debug(`[FolderBridge] FileServer listening on 127.0.0.1:${this.port}`);
                 resolve(true);
             });
         });
@@ -99,7 +102,7 @@ export class FileServer {
         this.server = null;
         this.port = 0;
         this.token = '';
-        console.debug('[FolderBridge] FileServer stopped');
+        logger.debug('[FolderBridge] FileServer stopped');
     }
 
     /** True after a successful start(). */
@@ -241,7 +244,7 @@ export class FileServer {
                 fsMod.createReadStream(nativePath).pipe(res);
             }
         } catch (err) {
-            console.error('[FolderBridge] FileServer request error:', err);
+            logger.error('[FolderBridge] FileServer request error:', err);
             if (!res.headersSent) {
                 res.writeHead(500);
                 res.end('Internal Server Error');

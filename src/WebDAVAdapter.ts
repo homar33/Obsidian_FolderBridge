@@ -2,6 +2,7 @@ import { createClient, WebDAVClient, FileStat } from 'webdav';
 import { normalizePath } from 'obsidian';
 import { MountPoint } from './types';
 import { saveWebDAVPassword, loadWebDAVPassword, clearWebDAVPassword } from './CredentialStore';
+import { logger } from './logger';
 
 /**
  * WebDAVAdapter wraps the `webdav` npm client and exposes the same
@@ -125,7 +126,7 @@ export class WebDAVAdapter {
                 }
             }
         } catch (e) {
-            console.error(`[Folder Bridge] WebDAV list failed for "${serverPath}":`, e);
+            logger.error(`[Folder Bridge] WebDAV list failed for "${serverPath}":`, e);
         }
         return { files, folders };
     }
@@ -142,7 +143,7 @@ export class WebDAVAdapter {
     async readBinary(serverPath: string): Promise<ArrayBuffer> {
         const result = await this.client.getFileContents(this.toServerPath(serverPath), { format: 'binary' });
         const buf = result as Buffer;
-        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+        return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     }
 
     // ------------------------------------------------------------------
