@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-03-09
+
+### Fixed
+- **"Suppress all watcher events" ignored until plugin reload** — when a mount's watcher settings (e.g. `watcherSuppressAllEvents`, `watcherCreateFilter`, debounce/polling values) were changed in the Edit dialog and saved, the change had no effect until the plugin was reloaded. Root cause: chokidar event callbacks in `FileWatcher.startWatching()` capture the `mount` object by reference at the time the watcher starts. `updateMount()` replaces the mount entry with a new spread-merged object, but previously only restarted the watcher when `realPath` changed — leaving the closure holding a stale reference. As a result, `dispatchEvent()` always read `watcherSuppressAllEvents` as `false` from the old object, so third-party attachment-rename plugins (e.g. "Custom Attachment Location") continued to rename PDF/PNG files to match the active note even when suppression was enabled. The watcher is now also restarted whenever any watcher-related setting changes (`watcherSuppressAllEvents`, `watcherCreateFilter`, `watcherDebounceMs`, `watcherUsePolling`, `watcherPollingIntervalMs`), ensuring the new settings take effect immediately on save.
+
 ## [2.7.0] - 2026-03-06
 
 ### Changed

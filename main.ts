@@ -1096,8 +1096,18 @@ export default class FolderBridgePlugin extends Plugin {
 			await this.notifyVaultMountAdded(updatedMount);
 		}
 
-		// Restart watcher on the new real path if needed
-		if (realPathChanged && wasEnabled) {
+		// Restart watcher when real path or any watcher-related setting changes.
+		// The chokidar callbacks capture `mount` by reference at startWatching() time.
+		// If the mount object is replaced (as updateMount() does via spread merge) without
+		// restarting the watcher, the closure reads stale values — e.g. watcherSuppressAllEvents
+		// set to true in Settings would have no effect until the plugin is reloaded.
+		const watcherSettingsChanged =
+			oldMount.watcherSuppressAllEvents !== updatedMount.watcherSuppressAllEvents ||
+			oldMount.watcherCreateFilter !== updatedMount.watcherCreateFilter ||
+			oldMount.watcherDebounceMs !== updatedMount.watcherDebounceMs ||
+			oldMount.watcherUsePolling !== updatedMount.watcherUsePolling ||
+			oldMount.watcherPollingIntervalMs !== updatedMount.watcherPollingIntervalMs;
+		if ((realPathChanged || watcherSettingsChanged) && wasEnabled) {
 			this.fileWatcher?.stopWatching(oldMount);
 			this.fileWatcher?.startWatching(updatedMount);
 		}
