@@ -3,6 +3,7 @@
  * to an absolute real filesystem path.
  */
 export type MountType = 'local' | 'webdav' | 'vault' | 's3' | 'sftp';
+export type MountVisibleFileFilter = 'all' | 'markdown-only' | 'pdf-only';
 
 export interface MountPoint {
 	id: string;            // Unique identifier (generated at creation)
@@ -14,6 +15,8 @@ export interface MountPoint {
 	deviceId?: string;     // The device ID that created this mount (for sync compatibility)
 	deviceOverrides?: Record<string, string>; // Map of deviceId -> realPath override
 	ignoreList?: string[]; // List of file/folder names to ignore for this specific mount
+	/** Limits which file types are exposed to Obsidian for this mount. */
+	visibleFileFilter?: MountVisibleFileFilter;
 	// Per-mount watcher settings (all optional; fall back to built-in defaults)
 	watcherDebounceMs?: number;       // Debounce threshold for change events (default 300 ms)
 	watcherUsePolling?: boolean;      // Use polling instead of native fs events (for NAS/network drives)

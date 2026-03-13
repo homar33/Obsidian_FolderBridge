@@ -7,6 +7,7 @@ import { S3Adapter } from './S3Adapter';
 import { SFTPAdapter } from './SFTPAdapter';
 import { FileServer, STREAMING_MIME } from './FileServer';
 import { logger } from './logger';
+import { isVisibleFileInMount } from './mountFileFilter';
 import { loadOptionalNodeModule } from './runtimeNode';
 import {
 	realPathToResourceUrl,
@@ -262,6 +263,16 @@ export class VirtualAdapter {
 		return false;
 	}
 
+	private isVisibleMountFile(normalizedPath: string, mount: MountPoint): boolean {
+		return isVisibleFileInMount(normalizedPath, mount);
+	}
+
+	private assertVisibleMountFile(normalizedPath: string, mount: MountPoint): void {
+		if (!this.isVisibleMountFile(normalizedPath, mount)) {
+			throw new Error(`Folder Bridge: Path "${normalizedPath}" is hidden by this mount's visible file filter.`);
+		}
+	}
+
 	// ------------------------------------------------------------------
 	// getName
 	// ------------------------------------------------------------------
@@ -304,20 +315,7 @@ export class VirtualAdapter {
 	async exists(normalizedPath: string, sensitive?: boolean): Promise<boolean> {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
-			if (this.isPathIgnored(normalizedPath, mount)) return false;
-			const webdav = this.getWebDAV(mount);
-			if (webdav) return await webdav.exists(this.toServerPath(normalizedPath, mount));
-			const s3 = this.getS3(mount);
-			if (s3) return await s3.exists(this.toServerPath(normalizedPath, mount));
-			const sftp = this.getSFTP(mount);
-			if (sftp) return await sftp.exists(this.toServerPath(normalizedPath, mount));
-			const realPath = this.toReal(normalizedPath, mount);
-			try {
-				await fs.promises.access(realPath, fs.constants.F_OK);
-				return true;
-			} catch {
-				return false;
-			}
+			return (await this.stat(normalizedPath)) !== null;
 		}
 
 		// A path may not physically exist in the vault yet but still needs to
@@ -340,14 +338,27 @@ export class VirtualAdapter {
 		if (mount) {
 			if (this.isPathIgnored(normalizedPath, mount)) return null;
 			const webdav = this.getWebDAV(mount);
-			if (webdav) return await webdav.stat(this.toServerPath(normalizedPath, mount));
+			if (webdav) {
+				const stat = await webdav.stat(this.toServerPath(normalizedPath, mount));
+				if (stat?.type === 'file' && !this.isVisibleMountFile(normalizedPath, mount)) return null;
+				return stat;
+			}
 			const s3 = this.getS3(mount);
-			if (s3) return await s3.stat(this.toServerPath(normalizedPath, mount));
+			if (s3) {
+				const stat = await s3.stat(this.toServerPath(normalizedPath, mount));
+				if (stat?.type === 'file' && !this.isVisibleMountFile(normalizedPath, mount)) return null;
+				return stat;
+			}
 			const sftp = this.getSFTP(mount);
-			if (sftp) return await sftp.stat(this.toServerPath(normalizedPath, mount));
+			if (sftp) {
+				const stat = await sftp.stat(this.toServerPath(normalizedPath, mount));
+				if (stat?.type === 'file' && !this.isVisibleMountFile(normalizedPath, mount)) return null;
+				return stat;
+			}
 			const realPath = this.toReal(normalizedPath, mount);
 			try {
 				const s = await fs.promises.stat(realPath);
+				if (s.isFile() && !this.isVisibleMountFile(normalizedPath, mount)) return null;
 				return {
 					type: s.isDirectory() ? 'folder' : 'file',
 					ctime: s.ctimeMs,
@@ -391,17 +402,29 @@ export class VirtualAdapter {
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
 				const sp = this.toServerPath(normalizedPath, mount);
-				return await webdav.list(sp, normalizedPath, mount);
+				const result = await webdav.list(sp, normalizedPath, mount);
+				return {
+					folders: result.folders,
+					files: result.files.filter(file => this.isVisibleMountFile(file, mount)),
+				};
 			}
 			const s3 = this.getS3(mount);
 			if (s3) {
 				const sp = this.toServerPath(normalizedPath, mount);
-				return await s3.list(sp, normalizedPath, mount);
+				const result = await s3.list(sp, normalizedPath, mount);
+				return {
+					folders: result.folders,
+					files: result.files.filter(file => this.isVisibleMountFile(file, mount)),
+				};
 			}
 			const sftp = this.getSFTP(mount);
 			if (sftp) {
 				const sp = this.toServerPath(normalizedPath, mount);
-				return await sftp.list(sp, normalizedPath, mount);
+				const result = await sftp.list(sp, normalizedPath, mount);
+				return {
+					folders: result.folders,
+					files: result.files.filter(file => this.isVisibleMountFile(file, mount)),
+				};
 			}
 			const realPath = this.toReal(normalizedPath, mount);
 			logger.debug(`[FolderBridge] list: resolved to real path "${realPath}"`);
@@ -480,13 +503,13 @@ export class VirtualAdapter {
 			if (entry.isDirectory()) {
 				folders.push(virtualChild);
 			} else if (entry.isFile()) {
-				files.push(virtualChild);
+				if (this.isVisibleMountFile(virtualChild, mount)) files.push(virtualChild);
 			} else if (entry.isSymbolicLink()) {
 				// For very large directories, skip symlink resolution to avoid delay
 				if (entries.length > 1000) {
 					logger.debug(`[FolderBridge] Skipping symlink resolution in large directory (${entries.length} items)`);
 					// Assume it's a file (safer default)
-					files.push(virtualChild);
+					if (this.isVisibleMountFile(virtualChild, mount)) files.push(virtualChild);
 				} else {
 					// Resolve symlinks to determine actual type
 					try {
@@ -494,7 +517,7 @@ export class VirtualAdapter {
 						if (s.isDirectory()) {
 							folders.push(virtualChild);
 						} else {
-							files.push(virtualChild);
+							if (this.isVisibleMountFile(virtualChild, mount)) files.push(virtualChild);
 						}
 					} catch {
 						// Broken symlink or permission error – skip silently
@@ -515,6 +538,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot read ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) return await webdav.readText(this.toServerPath(normalizedPath, mount));
 			const s3 = this.getS3(mount);
@@ -552,6 +576,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot read ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) return await webdav.readBinary(this.toServerPath(normalizedPath, mount));
 			const s3 = this.getS3(mount);
@@ -592,6 +617,7 @@ export class VirtualAdapter {
 		if (mount) {
 			if (mount.readOnly) { this.warnReadOnly(mount); return; }
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
 				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav write → ${this.toServerPath(normalizedPath, mount)}`); return; }
@@ -637,6 +663,7 @@ export class VirtualAdapter {
 		if (mount) {
 			if (mount.readOnly) { this.warnReadOnly(mount); return; }
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot write to ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
 				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav writeBinary → ${this.toServerPath(normalizedPath, mount)}`); return; }
@@ -678,6 +705,7 @@ export class VirtualAdapter {
 		if (mount) {
 			if (mount.readOnly) { this.warnReadOnly(mount); return; }
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot append to ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const webdav = this.getWebDAV(mount);
 			if (webdav) {
 				if (this.dryRun) { logger.debug(`[Folder Bridge DryRun] webdav append → ${this.toServerPath(normalizedPath, mount)}`); return; }
@@ -720,6 +748,7 @@ export class VirtualAdapter {
 		const mount = this.pathMapper.getMountForPath(normalizedPath);
 		if (mount) {
 			if (this.isPathIgnored(normalizedPath, mount)) throw new Error(`Folder Bridge: Cannot process ignored path "${normalizedPath}"`);
+			this.assertVisibleMountFile(normalizedPath, mount);
 			const content = await this.read(normalizedPath);
 			const updated = fn(content);
 			await this.write(normalizedPath, updated, options);

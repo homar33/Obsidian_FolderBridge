@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-03-13
+
+### Added
+- **Per-mount visible file-type filter** — mounts can now expose all files, Markdown only (`.md`, `.mdx`, `.canvas`), or PDF only (`.pdf`) to Obsidian. The filter applies to directory listings, startup mount scans, and file-watcher create/change events so non-matching files stay on disk but never appear in the file explorer, search, or live update stream.
+
+### Fixed
+- **BRAT install failed to load on Android** — optional desktop-only modules are now resolved through guarded literal `require(...)` branches in the shared runtime loader so the production bundle still includes supported dependencies while mobile no longer relies on an eval-style `Function('return require')` fallback during plugin load.
+- **`chokidar is unavailable in this environment` on desktop** — the runtime module loader regression introduced in the 2.7.0 cleanup no longer drops `chokidar`, `@aws-sdk/client-s3`, or `ssh2-sftp-client` out of the bundle. Desktop mounts can start watchers again after add/edit without requiring users to install anything globally.
+- **Suppressed watcher events did not survive restart correctly** — when `watcherSuppressAllEvents` is enabled, startup mount injection now skips replaying child `folder-created` / `file-created` events, avoids forcing a `raw` refresh, and leaves externally-created files hidden after restart as expected.
+
 ## [2.8.0] - 2026-03-09
 
 ### Fixed

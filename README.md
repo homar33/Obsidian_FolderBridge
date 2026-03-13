@@ -16,6 +16,7 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 - **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
 - **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
 - **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. Per-mount entries for precise control, plus a **global ignore list** applied to every mount (pre-filled with `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`).
+- **Per-Mount File-Type Filter** — Expose only selected file types from a mount, such as Markdown-only or PDF-only, while leaving the original folder structure untouched on disk.
 - **Read-Only Mounts** — Protect external folders from accidental writes. Write operations are silently swallowed and surface a one-time Notice so Obsidian's auto-save never enters an unrecoverable error loop. Toggle read-only on any mount instantly from the Settings row or via a hotkey-assignable command — no need to open the edit modal.
 - **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
 - **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
@@ -257,6 +258,7 @@ Each mount has independent file-watcher settings. Open **Edit** on any mount to 
 | **Debounce (ms)** | 300 | How long to wait after the last file-change event before notifying Obsidian. Lower = more responsive; higher = less CPU on rapid saves. |
 | **Use polling** | Off | Enable stat-based polling instead of native OS watch events. Required for most network drives and some containerised filesystems. |
 | **Polling interval (ms)** | 2000 | How frequently to poll when polling mode is on. Has no effect when polling is off. |
+| **Visible file types** | All | Limit what Obsidian sees from this mount: all files, Markdown only, or PDF only. |
 | **Max files** | 10 000 | Stop scanning a directory tree after this many entries. Protects performance on very large mounts. |
 
 > **Tip:** For a local SSD, leave all defaults. For a Samba/NFS network share, enable **Use polling** and set the interval to 3000–5000 ms to avoid hammering the server.

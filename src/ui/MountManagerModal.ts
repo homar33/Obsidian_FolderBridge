@@ -201,6 +201,7 @@ export class MountManagerModal extends Modal {
 	private watcherDebounceMs: number | undefined = undefined;
 	private watcherUsePolling = false;
 	private watcherPollingIntervalMs: number | undefined = undefined;
+	private visibleFileFilter: 'all' | 'markdown-only' | 'pdf-only' = 'all';
 	private watcherCreateFilter: 'all' | 'markdown-only' = 'all';
 	private watcherSuppressAllEvents = false;
 	private maxFiles: number | undefined = undefined;
@@ -243,6 +244,7 @@ export class MountManagerModal extends Modal {
 			this.watcherDebounceMs = editMount.watcherDebounceMs;
 			this.watcherUsePolling = editMount.watcherUsePolling ?? false;
 			this.watcherPollingIntervalMs = editMount.watcherPollingIntervalMs;
+			this.visibleFileFilter = editMount.visibleFileFilter ?? 'all';
 			this.watcherCreateFilter = editMount.watcherCreateFilter ?? 'all';
 			this.watcherSuppressAllEvents = editMount.watcherSuppressAllEvents ?? false;
 			this.maxFiles = editMount.maxFiles;
@@ -870,6 +872,19 @@ export class MountManagerModal extends Modal {
 		showHidePollingInterval(this.watcherUsePolling);
 
 		new Setting(advancedContainer)
+			.setName('Visible file types')
+			.setDesc(
+				'Limit which files in this mount are exposed to Obsidian. ' +
+				'Folders remain browsable, but only matching files appear in the file explorer, search, and startup scan.'
+			)
+			.addDropdown(drop => drop
+				.addOption('all', 'All file types (default)')
+				.addOption('markdown-only', 'Markdown only (.md, .mdx, .canvas)')
+				.addOption('pdf-only', 'PDF only (.pdf)')
+				.setValue(this.visibleFileFilter)
+				.onChange((val) => { this.visibleFileFilter = val as 'all' | 'markdown-only' | 'pdf-only'; }));
+
+		new Setting(advancedContainer)
 			.setName('New file events')
 			.setDesc(
 				'Controls which new files the watcher announces to Obsidian. ' +
@@ -994,6 +1009,7 @@ export class MountManagerModal extends Modal {
 					s3AccessKeyId: this.s3AccessKeyId,
 					s3ForcePathStyle: this.s3ForcePathStyle || undefined,
 					s3SecretKey: this.s3SecretKey || undefined,
+					visibleFileFilter: this.visibleFileFilter !== 'all' ? this.visibleFileFilter : undefined,
 					maxFiles: this.maxFiles,
 				},
 				this.editMount?.id,
@@ -1040,6 +1056,7 @@ export class MountManagerModal extends Modal {
 					sftpPassword: this.sftpPassword || undefined,
 					sftpPrivateKeyPath: this.sftpPrivateKeyPath || undefined,
 					sftpPassphrase: this.sftpPassphrase || undefined,
+					visibleFileFilter: this.visibleFileFilter !== 'all' ? this.visibleFileFilter : undefined,
 					maxFiles: this.maxFiles,
 				},
 				this.editMount?.id,
@@ -1089,6 +1106,7 @@ export class MountManagerModal extends Modal {
 					webdavUsername: this.webdavUsername,
 					// Pass password transiently so plugin can store it under the real mount id
 					webdavPassword: this.webdavPassword || undefined,
+					visibleFileFilter: this.visibleFileFilter !== 'all' ? this.visibleFileFilter : undefined,
 					watcherDebounceMs: undefined,
 					watcherUsePolling: undefined,
 					watcherPollingIntervalMs: undefined,
@@ -1169,6 +1187,7 @@ export class MountManagerModal extends Modal {
 				watcherDebounceMs: this.watcherDebounceMs,
 				watcherUsePolling: this.watcherUsePolling || undefined,
 				watcherPollingIntervalMs: this.watcherUsePolling ? this.watcherPollingIntervalMs : undefined,
+				visibleFileFilter: this.visibleFileFilter !== 'all' ? this.visibleFileFilter : undefined,
 				watcherCreateFilter: this.watcherCreateFilter !== 'all' ? this.watcherCreateFilter : undefined,
 				watcherSuppressAllEvents: this.watcherSuppressAllEvents || undefined,
 				maxFiles: this.maxFiles,

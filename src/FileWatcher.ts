@@ -5,6 +5,7 @@ import { App, normalizePath, Platform } from 'obsidian';
 import { MountPoint } from './types';
 import { PathMapper } from './PathMapper';
 import { logger } from './logger';
+import { isVisibleFileInMount, MARKDOWN_EXTENSIONS } from './mountFileFilter';
 import { loadOptionalNodeModule } from './runtimeNode';
 
 const pathMod: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
@@ -13,9 +14,6 @@ const pathMod: typeof import('path') = loadOptionalNodeModule<typeof import('pat
 type VaultInternal = {
     onChange(event: string, path: string, prev: null, stat: { type: string; ctime: number; mtime: number; size: number } | null): Promise<void>;
 };
-
-/** Markdown-ish extensions that should always fire vault events, even under 'markdown-only' filter. */
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.canvas', '.mdx']);
 
 export class FileWatcher {
     private app: App;
@@ -240,6 +238,11 @@ export class FileWatcher {
         const path = pathMod;
         const virtualPath = this.pathMapper.toVirtualPath(realPath, mount);
         const normalizedPath = normalizePath(virtualPath);
+
+        if ((eventType === 'file-created' || eventType === 'file-changed' || eventType === 'file-removed') && !isVisibleFileInMount(normalizedPath, mount)) {
+            logger.debug(`[FolderBridge] visibleFileFilter suppressed ${eventType} for ${normalizedPath}`);
+            return;
+        }
 
         // Bug fix: when watcherCreateFilter === 'markdown-only', suppress vault
         // file-created events for binary files (images, PDFs, videos, etc.).

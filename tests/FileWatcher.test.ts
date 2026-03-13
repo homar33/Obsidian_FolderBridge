@@ -382,6 +382,19 @@ describe('FileWatcher', () => {
             expect(mockOnChange).not.toHaveBeenCalled();
         });
 
+        it('file-created: suppresses files hidden by visibleFileFilter', async () => {
+            const { app, mockOnChange, mockGetAbstractFileByPath } = makeApp();
+            mockGetAbstractFileByPath.mockReturnValue(null);
+            const filteredMount = mkMount('m2', 'mounts/docs', 'C:/Users/test/Documents');
+            filteredMount.visibleFileFilter = 'markdown-only';
+            const fw = new FileWatcher(app, makeMapper(filteredMount), () => false);
+            fw.startWatching(filteredMount);
+
+            await getCallback('add')('C:/Users/test/Documents/manual.pdf');
+
+            expect(mockOnChange).not.toHaveBeenCalled();
+        });
+
         it('does not throw when vault.onChange is not a function', async () => {
             const app = {
                 vault: {

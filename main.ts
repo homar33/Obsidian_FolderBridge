@@ -19,6 +19,7 @@ import { S3Adapter } from './src/S3Adapter';
 import { SFTPAdapter } from './src/SFTPAdapter';
 import { logger } from './src/logger';
 import { loadOptionalNodeModule } from './src/runtimeNode';
+import { replayMountContentsToVault } from './src/mountScan';
 
 // Lazy-loaded Node.js builtins — safe on Obsidian Mobile (Capacitor).
 const fs: typeof import('fs') = loadOptionalNodeModule<typeof import('fs')>('fs') ?? null as never;
@@ -1054,9 +1055,10 @@ export default class FolderBridgePlugin extends Plugin {
 		const wasEnabled = oldMount.enabled;
 		const virtualPathChanged = normalizePath(oldMount.virtualPath) !== normalizePath(newData.virtualPath);
 		const realPathChanged = oldMount.realPath !== newData.realPath;
+		const visibleFileFilterChanged = oldMount.visibleFileFilter !== newData.visibleFileFilter;
 
 		// Remove from vault tree before mutating PathMapper state
-		if (wasEnabled && (virtualPathChanged || realPathChanged)) {
+		if (wasEnabled && (virtualPathChanged || realPathChanged || visibleFileFilterChanged)) {
 			await this.notifyVaultMountRemoved(oldMount);
 		}
 
@@ -1092,7 +1094,7 @@ export default class FolderBridgePlugin extends Plugin {
 		const updatedMount = this.settings.mountPoints[idx];
 
 		// Re-inject when enabled and something structural changed
-		if (wasEnabled && (virtualPathChanged || realPathChanged)) {
+		if (wasEnabled && (virtualPathChanged || realPathChanged || visibleFileFilterChanged)) {
 			await this.notifyVaultMountAdded(updatedMount);
 		}
 
@@ -1102,6 +1104,7 @@ export default class FolderBridgePlugin extends Plugin {
 		// restarting the watcher, the closure reads stale values — e.g. watcherSuppressAllEvents
 		// set to true in Settings would have no effect until the plugin is reloaded.
 		const watcherSettingsChanged =
+			oldMount.visibleFileFilter !== updatedMount.visibleFileFilter ||
 			oldMount.watcherSuppressAllEvents !== updatedMount.watcherSuppressAllEvents ||
 			oldMount.watcherCreateFilter !== updatedMount.watcherCreateFilter ||
 			oldMount.watcherDebounceMs !== updatedMount.watcherDebounceMs ||
@@ -1215,107 +1218,45 @@ export default class FolderBridgePlugin extends Plugin {
 		}
 
 		// Recursively notify Obsidian about all files and folders inside the mount
-		let fileCount = 0;
-		let folderCount = 0;
-		let isHuge = false;
-		const scanLimit = mount.maxFiles ?? 0; // 0 = unlimited
-		let scanLimitHit = false;
+		const suppressionEnabled = !!mount.watcherSuppressAllEvents;
 
 		const notice = new Notice(`Folder Bridge: Scanning and mounting "${mount.virtualPath}"...`, 0);
-
-		const recursivelyNotifyVault = async (folderPath: string) => {
-			if (scanLimitHit) return;
-			try {
-				const list = await this.app.vault.adapter.list(folderPath);
-
-				// Yield to the event loop to prevent locking up the UI
-				await new Promise(resolve => setTimeout(resolve, 0));
-
-				for (const folder of list.folders) {
-					if (scanLimitHit) return;
-
-					const folderName = folder.split('/').pop() || '';
-					const mountVirtual = normalizePath(mount.virtualPath);
-					const folderMountRelPath = folder.startsWith(mountVirtual + '/')
-						? folder.slice(mountVirtual.length + 1)
-						: undefined;
-
-					// Skip ignored folders
-					if (this.isNameIgnored(folderName, mount, folderMountRelPath)) continue;
-
-					// Skip hidden folders and node_modules to prevent massive performance hits
-					if (folderName.startsWith('.') || folderName === 'node_modules') continue;
-
-					if (!this.app.vault.getAbstractFileByPath(folder)) {
-						await vault.onChange('folder-created', folder, null, null);
-						folderCount++;
-						if (scanLimit > 0 && fileCount + folderCount >= scanLimit) {
-							scanLimitHit = true;
-							return;
-						}
-					}
-
-					if (folderCount + fileCount > 1000 && !isHuge) {
-						isHuge = true;
-						new Notice(`Folder Bridge: "${mount.virtualPath}" is very large. This may take a moment...`);
-					}
-
-					await recursivelyNotifyVault(folder);
-				}
-				for (let i = 0; i < list.files.length; i++) {
-					if (scanLimitHit) break;
-
-					const file = list.files[i];
-					// Yield every 100 files to prevent locking up the UI on massive flat folders
-					if (i > 0 && i % 100 === 0) {
-						await new Promise(resolve => setTimeout(resolve, 0));
-					}
-
-					const fileName = file.split('/').pop() || '';
-					const mountVirtualF = normalizePath(mount.virtualPath);
-					const fileMountRelPath = file.startsWith(mountVirtualF + '/')
-						? file.slice(mountVirtualF.length + 1)
-						: undefined;
-
-					// Skip ignored files
-					if (this.isNameIgnored(fileName, mount, fileMountRelPath)) continue;
-
-					// Skip hidden files
-					if (fileName.startsWith('.')) continue;
-
-					if (!this.app.vault.getAbstractFileByPath(file)) {
-						const stat = await this.app.vault.adapter.stat(file);
-						await vault.onChange('file-created', file, null, stat);
-						fileCount++;
-						if (scanLimit > 0 && fileCount + folderCount >= scanLimit) {
-							scanLimitHit = true;
-							break;
-						}
-					}
-				}
-			} catch (e) {
-				logger.debug(`Folder Bridge: Failed to list ${folderPath}`, e);
-			}
-		};
-
-		await recursivelyNotifyVault(normalizePath(mount.virtualPath));
+		const { fileCount, folderCount, scanLimitHit } = await replayMountContentsToVault(mount, {
+			list: (folderPath) => this.app.vault.adapter.list(folderPath),
+			stat: (filePath) => this.app.vault.adapter.stat(filePath),
+			hasAbstractFile: (path) => !!this.app.vault.getAbstractFileByPath(path),
+			isIgnored: (name, activeMount, mountRelativePath) => this.isNameIgnored(name, activeMount, mountRelativePath),
+			onFolderCreated: (path) => vault.onChange('folder-created', path, null, null),
+			onFileCreated: (path, stat) => vault.onChange('file-created', path, null, stat),
+			onHugeMount: () => {
+				new Notice(`Folder Bridge: "${mount.virtualPath}" is very large. This may take a moment...`);
+			},
+			onError: (folderPath, error) => {
+				logger.debug(`Folder Bridge: Failed to list ${folderPath}`, error);
+			},
+		});
 		notice.hide();
 		if (scanLimitHit) {
+			const scanLimit = mount.maxFiles ?? 0;
 			new Notice(
 				`Folder Bridge: Scan limit (${scanLimit.toLocaleString()} items) reached for "${mount.virtualPath}". ` +
 				`Increase "Max files" in mount Advanced settings to surface more.`,
 				10000
 			);
 		}
-		new Notice(`Folder Bridge: Mounted ${folderCount} folders and ${fileCount} files in "${mount.virtualPath}"`);
-		try {
-			await vault.onChange('raw', normalizePath(mount.virtualPath), null, null);
-		} catch (e) {
-			logger.debug('Folder Bridge: vault.onChange(raw) unavailable', e);
+		if (suppressionEnabled) {
+			new Notice(`Folder Bridge: Mounted "${mount.virtualPath}" with external file events suppressed.`);
+		} else {
+			new Notice(`Folder Bridge: Mounted ${folderCount} folders and ${fileCount} files in "${mount.virtualPath}"`);
+			try {
+				await vault.onChange('raw', normalizePath(mount.virtualPath), null, null);
+			} catch (e) {
+				logger.debug('Folder Bridge: vault.onChange(raw) unavailable', e);
+			}
 		}
 
 		// Force the file explorer to refresh the folder contents by expanding and collapsing it
-		setTimeout(() => {
+		if (!suppressionEnabled) setTimeout(() => {
 			const fileExplorerLeaves = this.app.workspace.getLeavesOfType('file-explorer');
 			if (fileExplorerLeaves.length === 0) return;
 
