@@ -1223,7 +1223,7 @@ export class VirtualAdapter {
 			} else if (srcMount) {
 				content = await fs.promises.readFile(this.toReal(normalizedPath, srcMount));
 			} else {
-				content = Buffer.from(await this.orig().readBinary(normalizedPath) as ArrayBuffer);
+				content = Buffer.from(await this.orig().readBinary(normalizedPath));
 			}
 
 			const contentAB = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer;

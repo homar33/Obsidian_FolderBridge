@@ -19,12 +19,12 @@ export class WelcomeModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
 
-        contentEl.createEl('h2', { text: '👋 Welcome to Folder Bridge' });
+        contentEl.createEl('h2', { text: '👋 Welcome to Folder bridge' });
 
         const descEl = contentEl.createDiv({ cls: 'folderbridge-welcome-desc' });
 
         descEl.createEl('p', {
-            text: 'Folder Bridge lets you mount external folders into your vault as seamless, native-feeling directories, with no copying, duplication, or symlinks required.',
+            text: 'Folder bridge lets you mount external folders into your vault as seamless, native-feeling directories, with no copying, duplication, or symlinks required.',
         }).addClass('folderbridge-welcome-intro');
 
         descEl.createEl('p', { text: 'What you can mount' }).addClass('folderbridge-welcome-intro');
@@ -46,7 +46,7 @@ export class WelcomeModal extends Modal {
         const tipBox = contentEl.createDiv({ cls: 'folderbridge-tip-box' });
         tipBox.createEl('strong', { text: '💡 Quick tip: ' });
         tipBox.appendText('After adding a mount, you can manage it from ');
-        tipBox.createEl('strong', { text: 'Settings → Folder Bridge' });
+        tipBox.createEl('strong', { text: 'Settings, then Folder bridge' });
         tipBox.appendText('. Per-mount options: read-only, custom ignore list, watcher tuning, and device-specific path overrides.');
 
         new Setting(contentEl)

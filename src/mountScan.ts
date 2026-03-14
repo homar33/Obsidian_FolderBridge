@@ -13,7 +13,7 @@ export interface MountScanDependencies {
     onFileCreated(path: string, stat: VaultStat): Promise<void>;
     onHugeMount?(): void;
     onError?(folderPath: string, error: unknown): void;
-    yieldToEventLoop?(): Promise<void>;
+    yieldToEventLoop?(this: void): Promise<void>;
 }
 
 export interface MountScanResult {
@@ -23,7 +23,7 @@ export interface MountScanResult {
     isHuge: boolean;
 }
 
-function defaultYieldToEventLoop(): Promise<void> {
+function defaultYieldToEventLoop(this: void): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, 0));
 }
 

@@ -14,9 +14,10 @@ on.mockReturnValue(mockWatcherInstance); // make .on() chainable
 const mockChokidarWatch = vi.fn(() => mockWatcherInstance);
 const mockWatcherOn = on;
 const mockWatcherClose = close;
+const mockLoadChokidar = () => ({ watch: mockChokidarWatch } as unknown as typeof import('chokidar'));
 
 // Install the mock before any describe blocks run
-FileWatcher._loadChokidar = () => ({ watch: mockChokidarWatch } as unknown as typeof import('chokidar'));
+FileWatcher._loadChokidar = mockLoadChokidar;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ describe('FileWatcher', () => {
     const mount = mkMount('m1', 'mounts/docs', 'C:/Users/test/Documents');
 
     beforeEach(() => {
+        FileWatcher._loadChokidar = mockLoadChokidar;
         mockChokidarWatch.mockClear();
         mockWatcherOn.mockClear();
         mockWatcherClose.mockClear();
@@ -124,6 +126,18 @@ describe('FileWatcher', () => {
 
             expect(mockWatcherClose).toHaveBeenCalledTimes(1);
             expect(mockChokidarWatch).toHaveBeenCalledTimes(2);
+        });
+
+        it('degrades cleanly when chokidar cannot be loaded', () => {
+            FileWatcher._loadChokidar = () => {
+                throw new Error('chokidar is unavailable in this environment');
+            };
+
+            const { app } = makeApp();
+            const fw = new FileWatcher(app, makeMapper(mount), () => false);
+
+            expect(() => fw.startWatching(mount)).not.toThrow();
+            expect(mockChokidarWatch).not.toHaveBeenCalled();
         });
     });
 

@@ -4,27 +4,80 @@ Extends Obsidian's single-root vault by letting you mount external folders as se
 
 ---
 
-## Features
+## Full Feature List (v2.11.0)
 
-- **Virtual Mount Points** — Map any absolute filesystem path into your vault at any virtual path
-- **Multi-Root Workspaces** — Work with files from multiple locations simultaneously
-- **Seamless Integration** — External folders appear and behave as native vault directories in the File Explorer, Quick Switcher, and all Obsidian commands
-- **Zero Duplication** — Files are read and written directly from their real locations
-- **WebDAV Support** — Mount Nextcloud, ownCloud, or any generic WebDAV server as a virtual vault folder. Works on desktop and Android — access your home server or NAS from your phone with no extra apps. Credentials are encrypted with the **OS keychain** (Windows DPAPI / macOS Keychain / Linux libsecret) and persist across restarts; the encrypted blob is device-specific and safe to sync.
-- **S3 / Backblaze B2 Mounts** — Mount any S3-compatible bucket (Amazon S3, Backblaze B2, MinIO, Cloudflare R2) as a virtual vault folder. Quick-fill presets for common providers; secret keys encrypted with the OS keychain. Works on desktop and Android.
-- **SFTP Mounts** — Mount any remote SSH directory using password or private-key authentication. Persistent auto-reconnecting connection per mount; server-side atomic rename. Desktop only.
-- **Vault-to-Vault Bridging** — Mount a folder from another Obsidian vault on the same device. `.obsidian` config and `.trash` are automatically excluded.
-- **Sync Compatibility** — Safely sync your vault across devices (Obsidian Sync, Syncthing). Mounts are device-specific, and you can map foreign mounts to different local paths on each device.
-- **Ignore List** — Hide specific files or folders (e.g., `node_modules`, `*.tmp`) from Obsidian. Per-mount entries for precise control, plus a **global ignore list** applied to every mount (pre-filled with `.DS_Store`, `Thumbs.db`, `desktop.ini`, `.git`).
-- **Per-Mount File-Type Filter** — Expose only selected file types from a mount, such as Markdown-only or PDF-only, while leaving the original folder structure untouched on disk.
-- **Read-Only Mounts** — Protect external folders from accidental writes. Write operations are silently swallowed and surface a one-time Notice so Obsidian's auto-save never enters an unrecoverable error loop. Toggle read-only on any mount instantly from the Settings row or via a hotkey-assignable command — no need to open the edit modal.
-- **Windows Hardened** — Full support for long paths (>260 chars), UNC network paths, Windows reserved filenames, case-insensitive NTFS comparisons, and cross-device moves
-- **Security Allowlist** — Only explicitly approved real paths can be accessed; system directories are blocked
-- **Dry-Run Mode** — Log all write operations to the console without executing them (safe for testing)
-- **Conflict Resolution UI** — Background reachability checks every 30 s; orange status bar and per-mount reconnect button when a mount goes offline
-- **Per-Mount Performance Tuning** — Configure debounce threshold, polling mode, polling interval, and max-files scan limit per mount
+### Core
+
+- **Zero duplication** — files are always read and written from their real locations on disk or on the remote backend
+- **Multi-root workspaces** — mount as many folders as you want at any virtual path inside one vault
+- **Full Obsidian integration** — mounted files participate in the file explorer, Quick Switcher, Search, graph-adjacent indexing workflows, embeds, and normal vault commands
+- **Image and PDF rendering** — embedded images and PDFs inside mounted folders render correctly, including files served through data URIs or the local file server when Obsidian's normal vault URL scheme would fail
+- **Security allowlist** — only explicitly approved real paths can be accessed; protected system directories are blocked
+- **Dry-run mode** — log write operations without executing them when testing a new setup
+
+### Mount Types
+
+- **Local folder mounts** — mount any directory from your local filesystem, external drive, NAS share, UNC path, or WSL-exposed folder
+- **WebDAV mounts** — mount folders from Nextcloud, ownCloud, Synology, or any generic WebDAV server; credentials are encrypted per-device on desktop via the OS keychain and fall back to session memory on mobile
+- **S3-compatible mounts** — mount Amazon S3, Backblaze B2, MinIO, Cloudflare R2, and other compatible buckets, with provider presets and per-device encrypted secrets on desktop
+- **SFTP mounts** — mount remote SSH directories with password or private-key authentication, persistent reconnecting sessions, and desktop-only support
+- **Vault-to-vault bridging** — mount content from another Obsidian vault; the other vault's config and conflict-prone folders such as `.obsidian`, `.trash`, and `.smart-connections` are auto-ignored
+
+### Mount Management
+
+- **Edit mounts in place** — change virtual path, real path, label, read-only mode, or watcher settings without deleting and recreating the mount
+- **Drag-drop reordering in Settings** — reorder mounts visually and persist the order immediately
+- **Drag-drop in the file explorer** — drag a mount root to a new location in the vault tree and update its virtual path live
+- **`Move mount to…` context action** — right-click a mount root and choose a new parent from the vault folder picker
+- **Read-only mounts** — block writes through a specific mount while keeping the content fully browsable and searchable
+- **Fast read-only toggles** — toggle read-only from the Settings row or through assignable commands for one mount or all mounts
+- **TOC config files** — load external read-only TOC files, bind the UI to a managed writable TOC file for local and vault mounts, and create that managed file directly from your current UI mounts
+
+### Reliability and Conflict Resolution
+
+- **Background health monitoring** — active mounts are probed every 30 seconds for reachability
+- **Status bar indicators** — the status item surfaces mount health, including the unreachable warning state and all-clear state
+- **One-click reconnect** — the conflict resolution UI exposes reconnect actions for mounts that have gone offline
+- **WebDAV-specific health probing** — WebDAV mounts are checked through the adapter instead of local filesystem assumptions
+- **Startup mount replay** — mounted folders are injected into Obsidian's internal vault tree without requiring a restart
+
+### Per-Mount Watcher Tuning
+
+- **Custom debounce** — set a debounce delay per mount to balance responsiveness against churn from rapid-save tools
+- **Polling mode** — switch individual mounts to stat polling for network shares or filesystems without reliable native watch events
+- **Polling interval** — configure polling cadence independently per mount
+- **Max-files cap** — limit startup scan size for very large directory trees
+- **Suppress all watcher events** — keep a mount visible while preventing its external file events from triggering Obsidian/plugin reactions
+- **New file event filter** — optionally announce only Markdown files on create, reducing interference from attachment-rename plugins
+- **Visible file-type filter** — expose all files, Markdown only, or PDF only while keeping the real folder structure intact on disk
+
+### Sync and Multi-Device
+
+- **Device-specific mount paths** — map the same virtual folder to different real paths on different machines
+- **Per-device path overrides** — override a synced mount's real path locally without changing another device's configuration
+- **Foreign mount control** — choose whether mounts created on another device are available on the current one
+- **Sync-friendly settings model** — mount definitions can sync while real secrets stay device-specific and decrypted only on the originating desktop OS keychain
+
+### Ignore System
+
+- **Browse-to-ignore** — pick a subfolder from the OS folder picker and store its mount-relative path automatically
+- **Path-relative ignore patterns** — entries containing `/` ignore a specific subtree without affecting similarly named folders elsewhere
+- **Name patterns** — plain entries such as `.git` or `node_modules` match any leaf with that name
+- **Glob patterns** — wildcard entries such as `*.tmp` and `~$*` match leaf names as globs
+- **Context-menu ignore** — right-click any file or folder inside a mount and add it instantly to the ignore list
+- **Global ignore rules** — apply a shared ignore baseline across every mount
+
+### Platform and Performance
+
+- **Windows hardened** — long paths, UNC/network paths, OneDrive-style workflows, reserved names, and case-insensitive comparisons are handled explicitly
+- **Linux and macOS support** — POSIX paths work natively, and the same core adapter and watcher logic applies across desktop platforms
+- **Android support for remote mounts** — WebDAV and S3-compatible mounts work on Android with a mobile-adapted UI
+- **Background file watcher** — file changes from mounted folders appear in Obsidian in real time when the backend supports it
+- **PathMapper cache optimisation** — active mounts are pre-normalised and sorted once so path resolution stays fast even with many mounts
 
 ### Platform Support
+
+Quick compatibility summary. For platform-specific caveats and setup notes, see [Platform Notes](#platform-notes) below.
 
 | Platform | Status | Notes |
 |----------|--------|-------|
@@ -95,6 +148,56 @@ Then in Obsidian: **Settings → Community Plugins → disable Safe Mode → ena
 The folder appears immediately in Obsidian's file explorer — no restart needed.
 
 For full step-by-step instructions on each mount type and feature, see the [Usage Guide](#usage-guide) below.
+
+For advanced JSON-driven mount definitions, see the [TOC Config Guide](docs/TOC_CONFIG.md).
+
+If you want the Settings UI to write local and vault mounts into a JSON file instead of only `data.json`, use the managed TOC workflow described below.
+
+---
+
+## Mount Ownership and TOC Workflow
+
+Folder Bridge now treats mount storage as a source-of-truth decision rather than just a file format option.
+
+There are three mount ownership modes:
+
+- **Manual / `data.json` mounts** — the default behavior when no managed TOC file is configured.
+- **Managed TOC mounts** — local and vault mounts written by the Settings UI into one writable JSON file.
+- **External TOC mounts** — additional JSON files that Folder Bridge reads at runtime but does not edit from the UI.
+
+How it works in practice:
+
+- If you do nothing, mounts keep working the old way and stay in `data.json`.
+- If you configure a **Managed TOC file**, new local and vault mounts created from Settings are written there instead.
+- If you already have a working local/vault setup in Settings, use **Create from current UI mounts** once to create the file and migrate those mounts automatically.
+- If you add **External TOC config files**, those mounts appear in Settings but stay read-only because their source file is authoritative.
+- WebDAV, S3, and SFTP mounts stay in `data.json` because TOC files do not store credentials.
+
+This affects the whole plugin, not just the TOC screens:
+
+- Editable mounts include manual mounts and managed-TOC mounts.
+- Read-only external TOC mounts are locked consistently in row actions, ignore-list editing, toggle flows, and command-palette actions.
+- Import/export covers mounts you can still manage from the UI.
+
+Recommended setup:
+
+1. Use **Managed TOC file** if you want one editable JSON source for local and vault mounts.
+2. Use **Create from current UI mounts** the first time if your setup already exists in Settings.
+3. Use **External TOC config files** for shared, reviewed, or machine-specific read-only mount definitions.
+4. Leave credentialed cloud mounts in `data.json`.
+
+For the JSON schema, examples, and troubleshooting details, see the [TOC Config Guide](docs/TOC_CONFIG.md).
+
+---
+
+## Support and Follow
+
+If Folder Bridge is useful in your workflow, you can support the project in lightweight ways:
+
+- Follow other work on [GitHub](https://github.com/tescolopio)
+- Browse or star the [Folder Bridge repository](https://github.com/tescolopio/Obsidian_FolderBridge)
+
+The plugin settings also include direct GitHub buttons under **Support Folder Bridge**.
 
 ---
 
@@ -291,18 +394,6 @@ The override applies only to this device; the original path is preserved for the
 | **Show status bar item** | Display the active mount count (and health indicator) in Obsidian's status bar. |
 | **Allow foreign mounts** | Activate mounts created on other devices if the real path exists on this machine. |
 | **Mount list** | Enable, disable, edit, or remove individual mounts. Each row shows a live reachability badge and drag handle. |
-
----
-
-## Sync Compatibility (Obsidian Sync / Syncthing)
-
-Folder Bridge is designed to work safely with sync engines. Mounts are device-scoped and do not sync real filesystem paths to other machines. See [Device-Specific Paths](#device-specific-paths-multi-device-sync) above for cross-device setup.
-
----
-
-## Ignore List (Legacy Section)
-
-See [Ignore List](#ignore-list) in the Usage Guide above for full documentation.
 
 ---
 

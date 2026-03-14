@@ -1,9 +1,10 @@
-import { App, Modal, Notice, Platform, Setting, SuggestModal, TFolder, TextComponent, normalizePath } from 'obsidian';
+import { App, ButtonComponent, Modal, Notice, Platform, Setting, SuggestModal, TFolder, TextComponent, normalizePath } from 'obsidian';
 import { MountPoint, MountStatus, MountType } from '../types';
 import { SecurityManager } from '../SecurityManager';
 import { checkPathAccessible, isDirectory, getPlatform, isWSL } from '../OSHelpers';
 import { logger } from '../logger';
 import { getRuntimeRequire, loadOptionalNodeModule } from '../runtimeNode';
+import { SubmitStateController } from './SubmitStateController';
 
 // Lazy-loaded — unavailable on Obsidian Mobile (Capacitor).
 const path: typeof import('path') = loadOptionalNodeModule<typeof import('path')>('path') ?? null as never;
@@ -37,7 +38,7 @@ export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: 
 		// it on the electron object so both old and new versions work here.
 		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
-			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+			new Notice('Folder bridge: native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
 		const options: ElectronOpenDialogOptions = {
@@ -52,7 +53,7 @@ export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: 
 		return result.filePaths[0];
 	} catch (err) {
 		logger.error('Folder Bridge: Electron dialog error', err);
-		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+		new Notice('Folder bridge: native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
 }
@@ -68,7 +69,7 @@ export async function browseMultipleFoldersOnDisk(title = 'Select folders', defa
 		const electron = runtimeRequire?.('electron');
 		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
-			new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+			new Notice('Folder bridge: native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
 		const options: ElectronOpenDialogOptions = {
@@ -83,7 +84,7 @@ export async function browseMultipleFoldersOnDisk(title = 'Select folders', defa
 		return result.filePaths;
 	} catch (err) {
 		logger.error('Folder Bridge: Electron dialog error', err);
-		new Notice('Folder Bridge: Native folder browser is unavailable. Please type the path manually.');
+		new Notice('Folder bridge: native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
 }
@@ -212,12 +213,19 @@ export class MountManagerModal extends Modal {
 	private virtualPathText: TextComponent | null = null;
 	private realPathText: TextComponent | null = null;
 	private labelText: TextComponent | null = null;
+	private saveButton: ButtonComponent | null = null;
+	private cancelButton: ButtonComponent | null = null;
+	private readonly submitState: SubmitStateController;
 
 	constructor(app: App, security: SecurityManager, onSave: OnMountSave, editMount?: MountPoint) {
 		super(app);
 		this.security = security;
 		this.onSave = onSave;
 		this.editMount = editMount;
+		this.submitState = new SubmitStateController(
+			editMount ? 'Save changes' : 'Validate and add',
+			editMount ? 'Saving...' : 'Adding...',
+		);
 		// Pre-populate state from existing mount
 		if (editMount) {
 			this.mountType = editMount.mountType ?? 'local';
@@ -370,7 +378,7 @@ export class MountManagerModal extends Modal {
 		if (!this.editMount) {
 			new Setting(webdavSection)
 				.setName('Quick-fill preset')
-				.setDesc('Optionally choose your service to pre-fill the Server URL field below.')
+				.setDesc('Optionally choose your service to pre-fill the server URL field below.')
 				.addDropdown(drop => {
 					drop.addOption('', '— select a preset —');
 					drop.addOption('nextcloud', 'Nextcloud');
@@ -448,7 +456,7 @@ export class MountManagerModal extends Modal {
 		});
 
 		const S3_PRESETS: Record<string, { region: string; endpoint: string; forcePathStyle: boolean; note: string }> = {
-			aws: { region: 'us-east-1', endpoint: '', forcePathStyle: false, note: 'Use an IAM user with S3 read/write permissions. Access Key ID + Secret Access Key.' },
+			aws: { region: 'us-east-1', endpoint: '', forcePathStyle: false, note: 'Use an IAM user with S3 read/write permissions. Access key ID + secret access key.' },
 			b2: { region: 'us-west-004', endpoint: 'https://s3.us-west-004.backblazeb2.com', forcePathStyle: true, note: 'Use a Backblaze Application Key with read/write access to your bucket. Set endpoint to your bucket region.' },
 			minio: { region: 'us-east-1', endpoint: 'http://localhost:9000', forcePathStyle: true, note: 'Self-hosted MinIO. Path-style is required. Set endpoint to your MinIO URL.' },
 			cloudflare: { region: 'auto', endpoint: 'https://<ACCOUNT_ID>.r2.cloudflarestorage.com', forcePathStyle: false, note: 'Cloudflare R2. Replace <ACCOUNT_ID> with your Cloudflare account ID.' },
@@ -810,7 +818,7 @@ export class MountManagerModal extends Modal {
 		// ── Read-only ──────────────────────────────────────────────────────
 		new Setting(contentEl)
 			.setName('Read-only')
-			.setDesc('When enabled, Folder Bridge will refuse any write operations to this mount')
+			.setDesc('When enabled, Folder bridge will refuse any write operations to this mount')
 			.addToggle(toggle => toggle
 				.setValue(this.readOnly)
 				.onChange(val => { this.readOnly = val; }));
@@ -932,18 +940,26 @@ export class MountManagerModal extends Modal {
 			});
 		// ── Action buttons ─────────────────────────────────────────────────
 		new Setting(contentEl)
-			.addButton(btn => btn
-				.setButtonText(this.editMount ? 'Save changes' : 'Validate and add')
-				.setCta()
-				.onClick(() => {
-					void this.handleSave().catch(err => {
-						logger.error('Folder Bridge: Failed to save mount', err);
-						new Notice('Folder Bridge: Failed to save mount. Check the developer console for details.');
+			.addButton(btn => {
+				this.saveButton = btn;
+				return btn
+					.setButtonText(this.submitState.currentLabel())
+					.setCta()
+					.onClick(() => {
+						void this.handleSave().catch(err => {
+							this.submitState.finish();
+							this.syncSubmitButtons();
+							logger.error('Folder Bridge: Failed to save mount', err);
+							new Notice('Folder bridge: failed to save mount. Check the developer console for details.');
+						});
 					});
-				}))
-			.addButton(btn => btn
-				.setButtonText('Cancel')
-				.onClick(() => this.close()));
+			})
+			.addButton(btn => {
+				this.cancelButton = btn;
+				return btn
+					.setButtonText('Cancel')
+					.onClick(() => this.close());
+			});
 	}
 
 	// ------------------------------------------------------------------
@@ -961,11 +977,21 @@ export class MountManagerModal extends Modal {
 		this.labelText?.setValue(name);
 	}
 
+	private syncSubmitButtons(): void {
+		const isBusy = this.submitState.isBusy();
+		this.saveButton?.setDisabled(isBusy);
+		this.cancelButton?.setDisabled(isBusy);
+		this.saveButton?.setButtonText(this.submitState.currentLabel());
+	}
+
 	// ------------------------------------------------------------------
 	// Save / validation
 	// ------------------------------------------------------------------
 
 	private async handleSave(): Promise<void> {
+		if (!this.submitState.tryBegin()) return;
+		this.syncSubmitButtons();
+
 		const isWebDAV = this.mountType === 'webdav';
 		const isS3 = this.mountType === 's3';
 		const isSFTP = this.mountType === 'sftp';
@@ -973,24 +999,34 @@ export class MountManagerModal extends Modal {
 		// ── S3-specific validation ──────────────────────────────────────────
 		if (isS3) {
 			if (!this.s3Bucket) {
-				new Notice('Folder Bridge: S3 bucket name is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: S3 bucket name is required.');
 				return;
 			}
 			if (!this.s3Region) {
-				new Notice('Folder Bridge: S3 region is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: S3 region is required.');
 				return;
 			}
 			if (!this.s3AccessKeyId) {
-				new Notice('Folder Bridge: S3 access key ID is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: S3 access key ID is required.');
 				return;
 			}
 			const hasStoredSecret = !!(this.editMount?.encryptedS3SecretKey);
 			if (!this.editMount && !this.s3SecretKey && !hasStoredSecret) {
-				new Notice('Folder Bridge: S3 secret access key is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: S3 secret access key is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
-				new Notice('Folder Bridge: Virtual path is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: virtual path is required.');
 				return;
 			}
 
@@ -1023,21 +1059,29 @@ export class MountManagerModal extends Modal {
 		// ── SFTP-specific validation ────────────────────────────────────────
 		if (isSFTP) {
 			if (!this.sftpHost) {
-				new Notice('Folder Bridge: SFTP host is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: SFTP host is required.');
 				return;
 			}
 			if (!this.sftpUsername) {
-				new Notice('Folder Bridge: SFTP username is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: SFTP username is required.');
 				return;
 			}
 			const hasStoredPassword = !!(this.editMount?.encryptedSftpPassword);
 			const hasKeyPath = !!this.sftpPrivateKeyPath;
 			if (!this.editMount && !this.sftpPassword && !hasStoredPassword && !hasKeyPath) {
-				new Notice('Folder Bridge: SFTP password or private key path is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: SFTP password or private key path is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
-				new Notice('Folder Bridge: Virtual path is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: virtual path is required.');
 				return;
 			}
 
@@ -1070,26 +1114,36 @@ export class MountManagerModal extends Modal {
 		// ── WebDAV-specific validation ─────────────────────────────────────
 		if (isWebDAV) {
 			if (!this.webdavUrl) {
-				new Notice('Folder Bridge: WebDAV server URL is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: WebDAV server URL is required.');
 				return;
 			}
 			try { new URL(this.webdavUrl); } catch {
-				new Notice('Folder Bridge: WebDAV URL is not valid. Include the scheme, e.g. https://…');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: WebDAV URL is not valid. Include the scheme, e.g. https://…');
 				return;
 			}
 			if (!this.webdavUsername) {
-				new Notice('Folder Bridge: WebDAV username is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: WebDAV username is required.');
 				return;
 			}
 			// Require a password on add unless an encrypted one is already stored
 			// (e.g. user opens settings on the same device that originally saved it)
 			const hasStoredPassword = !!(this.editMount?.encryptedWebdavPassword);
 			if (!this.editMount && !this.webdavPassword && !hasStoredPassword) {
-				new Notice('Folder Bridge: WebDAV password is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: WebDAV password is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
-				new Notice('Folder Bridge: Virtual path is required.');
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice('Folder bridge: virtual path is required.');
 				return;
 			}
 
@@ -1126,15 +1180,21 @@ export class MountManagerModal extends Modal {
 			|| (this.realPath ? path.basename(this.realPath) : '');
 
 		if (!virtualPathToUse) {
-			new Notice('Folder Bridge: Virtual path is required.');
+			this.submitState.finish();
+			this.syncSubmitButtons();
+			new Notice('Folder bridge: virtual path is required.');
 			return;
 		}
 		if (!this.realPath) {
-			new Notice('Folder Bridge: Real path is required.');
+			this.submitState.finish();
+			this.syncSubmitButtons();
+			new Notice('Folder bridge: real path is required.');
 			return;
 		}
 		if (!path.isAbsolute(this.realPath)) {
-			new Notice('Folder Bridge: Real path must be an absolute filesystem path.');
+			this.submitState.finish();
+			this.syncSubmitButtons();
+			new Notice('Folder bridge: real path must be an absolute filesystem path.');
 			return;
 		}
 
@@ -1152,7 +1212,9 @@ export class MountManagerModal extends Modal {
 			[], // Full existing-mount check is done again by the plugin's addMount() / updateMount()
 		);
 		if (validationError) {
-			new Notice(`Folder Bridge: ${validationError}`);
+			this.submitState.finish();
+			this.syncSubmitButtons();
+			new Notice(`Folder bridge: ${validationError}`);
 			return;
 		}
 
@@ -1161,13 +1223,17 @@ export class MountManagerModal extends Modal {
 		if (realPathChanged) {
 			const dirExists = await isDirectory(this.realPath);
 			if (!dirExists) {
-				new Notice(`Folder Bridge: "${this.realPath}" is not an accessible directory.`);
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice(`Folder bridge: "${this.realPath}" is not an accessible directory.`);
 				return;
 			}
 
 			const { accessible, error } = await checkPathAccessible(this.realPath);
 			if (!accessible) {
-				new Notice(`Folder Bridge: Cannot access "${this.realPath}": ${error}`);
+				this.submitState.finish();
+				this.syncSubmitButtons();
+				new Notice(`Folder bridge: cannot access "${this.realPath}": ${error}`);
 				return;
 			}
 		}
@@ -1175,7 +1241,7 @@ export class MountManagerModal extends Modal {
 		// Non-blocking advisory warnings (e.g. UNC / network paths)
 		const warnings = this.security.getPathWarnings(this.realPath);
 		for (const w of warnings) {
-			new Notice(`Folder Bridge warning: ${w}`, 10_000);
+			new Notice(`Folder bridge warning: ${w}`, 10_000);
 		}
 
 		await this.onSave(

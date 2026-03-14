@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-03-13
+
+### Added
+- **Managed TOC workflow for UI mounts** — local and vault mounts created in Settings can now be stored in one writable JSON TOC file instead of living only in `data.json`.
+- **Guided managed TOC setup** — the Settings tab now suggests a vault-root `folderbridge.managed.json` path and offers a one-click **Create from current UI mounts** action that creates the file, binds the UI to it, and migrates existing local/vault UI mounts in one step.
+- **GitHub support links in settings** — the Settings tab now includes direct links to the Folder Bridge repository and the author GitHub profile so users can follow other projects or star the repo.
+
+### Changed
+- **Mount ownership is now source-driven across the plugin** — manual mounts and managed-TOC mounts share the same edit, toggle, ignore-list, override, import/export, and command-palette flows. Only mounts loaded from external TOC files remain locked to their source file.
+- **Credential-based cloud mounts stay in `data.json`** — WebDAV, S3, and SFTP mounts are intentionally excluded from TOC storage because TOC files do not store secrets.
+
+### Fixed
+- **`Validate and add` no longer appears stuck or double-submits** — the add/edit modal now becomes single-shot while saving, and successful mount injection into the vault tree runs in the background instead of blocking the modal from closing. This prevents the second click from trying to add the same mount again when the initial scan is still running.
+
 ## [2.10.0] - 2026-03-13
 
 ### Fixed

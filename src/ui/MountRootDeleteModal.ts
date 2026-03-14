@@ -32,7 +32,7 @@ export class MountRootDeleteModal extends Modal {
 
         new Setting(contentEl)
             .setName("Don't ask again")
-            .setDesc("Save this choice in settings")
+            .setDesc('Save this choice in settings')
             .addToggle(toggle => toggle
                 .setValue(this.dontAskAgain)
                 .onChange(value => {

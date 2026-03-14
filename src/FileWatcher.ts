@@ -1,7 +1,7 @@
 // Type-only import — no runtime require, so chokidar's Node.js dependencies are
 // never evaluated at bundle-load time on Obsidian Mobile.
 import type * as Chokidar from 'chokidar';
-import { App, normalizePath, Platform } from 'obsidian';
+import { App, normalizePath, Notice, Platform } from 'obsidian';
 import { MountPoint } from './types';
 import { PathMapper } from './PathMapper';
 import { logger } from './logger';
@@ -20,6 +20,7 @@ export class FileWatcher {
     private pathMapper: PathMapper;
     private isIgnored: (name: string, mount: MountPoint, mountRelativePath?: string) => boolean;
     private watchers: Map<string, Chokidar.FSWatcher> = new Map();
+    private watcherBackendWarningShown = false;
 
     /**
      * Chokidar loader — resolved lazily so Node.js fs/events are never loaded on
@@ -59,6 +60,15 @@ export class FileWatcher {
         this.app = app;
         this.pathMapper = pathMapper;
         this.isIgnored = isIgnored;
+    }
+
+    private warnWatcherUnavailable(mount: MountPoint, error: unknown): void {
+        logger.warn(`[FolderBridge] File watcher unavailable for mount ${mount.virtualPath}:`, error);
+        if (this.watcherBackendWarningShown) return;
+        this.watcherBackendWarningShown = true;
+        if (typeof Notice === 'function') {
+            new Notice('Folder bridge: external file watching is unavailable in this environment. Mounts still work, but filesystem changes made outside Obsidian will not live-sync until the watcher backend is available.');
+        }
     }
 
     // ── Suppression API ────────────────────────────────────────────────────
@@ -116,8 +126,19 @@ export class FileWatcher {
 
         // Load Node.js modules lazily — these are only available on desktop.
         // Uses FileWatcher._loadChokidar so tests can supply a mock by reassigning it.
-        const chokidar = FileWatcher._loadChokidar();
         const path = pathMod;
+        if (!path) {
+            this.warnWatcherUnavailable(mount, new Error('path module is unavailable in this environment'));
+            return;
+        }
+
+        let chokidar: typeof Chokidar;
+        try {
+            chokidar = FileWatcher._loadChokidar();
+        } catch (error) {
+            this.warnWatcherUnavailable(mount, error);
+            return;
+        }
 
         // [FEATURE_20260222] Initialize chokidar watcher for the mount's real path
         const watcher = chokidar.watch(realPath, {

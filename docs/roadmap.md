@@ -2,7 +2,7 @@
 
 This document tracks the current status of platform support and planned features. It is updated with each release.
 
-**Current version: v2.3.0** — Last updated: 2026-02-25
+**Current version: v2.11.0** — Last updated: 2026-03-13
 
 ---
 
@@ -22,6 +22,9 @@ This document tracks the current status of platform support and planned features
 
 | Version | What shipped |
 |---------|-------------|
+| v2.11.0 | **Managed TOC workflow for UI mounts** — local and vault mounts created in Settings can now be stored in one writable JSON TOC file while additional external TOC files remain read-only and authoritative. **Guided setup** — the Settings tab now suggests a default managed TOC path and can create/bind/migrate existing UI mounts in one step. |
+| v2.10.0 | **Community-plugin reviewer compatibility follow-up** — optional bundled desktop modules are now injected at build time rather than exposed through reviewer-sensitive runtime-loader source patterns. Promise-capable modal callbacks now use explicit fire-and-forget wrappers with logging. WebDAV/SFTP typing cleanup landed with the reviewer pass. |
+| v2.9.0 | **Per-mount visible file-type filter** — mounts can now expose all files, Markdown only, or PDF only. **Android / BRAT load fix** — mobile-safe runtime loading and correct desktop dependency bundling. **Desktop watcher regression fix** — optional modules such as `chokidar` are bundled again correctly. **Suppressed watcher restart fix** — startup replay now respects watcher suppression state. |
 | v2.3.0 | **Read-only toggle per mount** — a lock/unlock icon button on every mount row in Settings lets you flip read-only without opening the edit modal; amber tint when locked. **Toggle read-only on all mounts** command — one hotkey-assignable action to lock/unlock every mount on this device. **Toggle read-only on a specific mount…** command — fuzzy picker showing each mount’s current lock state, hotkey-assignable. |
 | v2.2.0 | **Multi-select browse for ignore list** — the Browse… button in the per-mount ignore list opens the OS folder picker with multi-selection enabled; all chosen folders are added in one save + vault-reload. |
 | v2.1.0 | **Read-only mount graceful handling** — write operations through read-only mounts are now silently swallowed and surface a one-time `Notice` instead of throwing (fixes editor crash loop on auto-save). **VirtualAdapter vault name** — `getName()` now delegates to the underlying adapter instead of returning the hardcoded string `'VirtualAdapter'` (fixes vault name showing incorrectly in the lower-left UI). |
@@ -56,6 +59,10 @@ This document tracks the current status of platform support and planned features
 
 ### Medium Priority
 
+- **Mounted-folder sort modes / file organisation** — add explicit ordering controls for bridged folders without trying to replace Obsidian's file explorer UI.
+	- **Phase 1: low-risk sort modes** — alphabetical ascending/descending, folders-first ordering, and extension/filetype ordering. These can likely be implemented in Folder Bridge's adapter listing path before results are returned to Obsidian.
+	- **Phase 2: metadata sorts** — modified time and possibly size-based ordering. Feasible for local mounts, but more expensive for WebDAV/S3/SFTP because sorting may require extra metadata/stat calls for every entry.
+	- **Phase 3: grouped explorer views (exploratory)** — Windows Explorer-style grouping such as “by file type” or “by date” would require deeper file-explorer UI integration rather than simple adapter ordering. Higher maintenance risk; only worth pursuing if simpler sort modes are not sufficient.
 - **OAuth2-based Google Drive mounting** — requires a local HTTP redirect server for the auth callback; scoped to a future release once the core mount types stabilise
 - **OneDrive OAuth2 mounting** — same auth-server requirement as Google Drive; UNC path workaround (`\\server\share`) works today for on-prem scenarios
 - **Lazy / paginated directory listing** — for mounts with tens of thousands of files; currently capped at 10 000 entries via a hard limit
@@ -63,6 +70,7 @@ This document tracks the current status of platform support and planned features
 
 ### Low Priority / Exploratory
 
+- **Per-folder organization rules** — if sort modes prove useful, evaluate whether sort order should be configurable globally, per mount, or per bridged subtree. This is intentionally deferred until a simple sort implementation exists and performance characteristics are known.
 - **Read-only HTTP/S static server** — serve a mounted folder as a local file server for lightweight in-vault sharing
 - **Per-mount credential rotation UI** — re-enter or rotate credentials for a specific mount without removing and recreating it
 - **Mount health dashboard** — dedicated view showing uptime, last-seen, and error history per mount

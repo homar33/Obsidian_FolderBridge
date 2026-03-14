@@ -105,11 +105,15 @@ export interface MountPoint {
 	encryptedSftpPassphrase?: string;
 	/** TRANSIENT — carries the raw passphrase from the modal. Never persisted. */
 	sftpPassphrase?: string;
+	/** Runtime-only source path when this mount is generated from a TOC config file. */
+	tocSourcePath?: string;
 }
 
 export interface FolderBridgeSettings {
 	mountPoints: MountPoint[];
 	allowlist: string[];    // Approved real paths (must match before any I/O)
+	managedTocSource: string; // Optional writable TOC file for UI-managed local/vault mounts
+	tocSources: string[];   // Absolute paths to JSON config files that define additional mounts
 	dryRun: boolean;        // Log writes without executing them
 	showStatusBar: boolean;
 	mountRootDeletionBehavior: 'ask' | 'unmount' | 'delete';
@@ -129,6 +133,8 @@ export interface FolderBridgeSettings {
 export const DEFAULT_SETTINGS: FolderBridgeSettings = {
 	mountPoints: [],
 	allowlist: [],
+	managedTocSource: '',
+	tocSources: [],
 	dryRun: false,
 	showStatusBar: true,
 	mountRootDeletionBehavior: 'ask',
@@ -144,6 +150,32 @@ export interface MountStatus {
 	reachable: boolean;
 	readOnly: boolean;     // true if OS-level or mount-level read-only
 	error?: string;
+}
+
+export interface TocFileMount {
+	id?: string;
+	deviceId?: string;
+	virtualPath: string;
+	realPath: string;
+	label?: string;
+	enabled?: boolean;
+	readOnly?: boolean;
+	mountType?: 'local' | 'vault';
+	ignore?: string[];
+	ignoreList?: string[];
+	visibleFileFilter?: MountVisibleFileFilter;
+	watcherDebounceMs?: number;
+	watcherUsePolling?: boolean;
+	watcherPollingIntervalMs?: number;
+	watcherCreateFilter?: 'all' | 'markdown-only';
+	watcherSuppressAllEvents?: boolean;
+	maxFiles?: number;
+	deviceOverrides?: Record<string, string>;
+}
+
+export interface TocFileConfig {
+	version?: number | string;
+	mounts?: TocFileMount[];
 }
 
 export type OSPlatform = 'windows' | 'linux' | 'mac' | 'unknown';
