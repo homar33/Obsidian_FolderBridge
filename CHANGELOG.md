@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-03-18
+
+### Fixed
+- **`chokidar is unavailable in this environment` regression on desktop** — the esbuild bundling plugin was missing `resolveDir` in its `onLoad` result, causing esbuild to leave `require('chokidar')`, `require('@aws-sdk/client-s3')`, and `require('ssh2-sftp-client')` as live runtime calls instead of bundling them into `main.js`. The `resolveDir: __dirname` fix restores the v2.9.0 behavior: all three packages are now statically embedded in the production bundle, so desktop watchers, S3 mounts, and SFTP mounts work even in sandboxed Obsidian environments where runtime `require()` cannot reach the plugin's `node_modules`.
+- **Sentence-case compliance for community plugin PR** — all remaining `new Notice('Folder Bridge: ...')` static string literals in class methods are now template literals (`\`${this.manifest.name}: ...\``), and the standalone `backgroundTask` helper uses a defaulted `pluginName` parameter. Notices in `src/FileWatcher.ts` and `src/ui/MountManagerModal.ts` (which have no access to `this.manifest`) have their `Folder Bridge: ` prefix removed. These changes ensure zero violations under `eslint-plugin-obsidianmd`'s default brands list (which does not include "Folder Bridge").
+
 ## [2.14.2] - 2026-03-17
 
 ### Fixed

@@ -38,7 +38,7 @@ export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: 
 		// it on the electron object so both old and new versions work here.
 		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
-			new Notice('Folder Bridge: native folder browser is unavailable. Please type the path manually.');
+			new Notice('Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
 		const options: ElectronOpenDialogOptions = {
@@ -53,7 +53,7 @@ export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: 
 		return result.filePaths[0];
 	} catch (err) {
 		logger.error('Folder Bridge: Electron dialog error', err);
-		new Notice('Folder Bridge: native folder browser is unavailable. Please type the path manually.');
+		new Notice('Native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
 }
@@ -69,7 +69,7 @@ export async function browseMultipleFoldersOnDisk(title = 'Select folders', defa
 		const electron = runtimeRequire?.('electron');
 		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
 		if (!dialog?.showOpenDialog) {
-			new Notice('Folder Bridge: native folder browser is unavailable. Please type the path manually.');
+			new Notice('Native folder browser is unavailable. Please type the path manually.');
 			return null;
 		}
 		const options: ElectronOpenDialogOptions = {
@@ -84,7 +84,7 @@ export async function browseMultipleFoldersOnDisk(title = 'Select folders', defa
 		return result.filePaths;
 	} catch (err) {
 		logger.error('Folder Bridge: Electron dialog error', err);
-		new Notice('Folder Bridge: native folder browser is unavailable. Please type the path manually.');
+		new Notice('Native folder browser is unavailable. Please type the path manually.');
 		return null;
 	}
 }
@@ -950,7 +950,7 @@ export class MountManagerModal extends Modal {
 							this.submitState.finish();
 							this.syncSubmitButtons();
 							logger.error('Folder Bridge: Failed to save mount', err);
-							new Notice('Folder Bridge: failed to save mount. Check the developer console for details.');
+							new Notice('Failed to save mount. Check the developer console for details.');
 						});
 					});
 			})
@@ -1001,32 +1001,32 @@ export class MountManagerModal extends Modal {
 			if (!this.s3Bucket) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: S3 bucket name is required.');
+				new Notice('S3 bucket name is required.');
 				return;
 			}
 			if (!this.s3Region) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: S3 region is required.');
+				new Notice('S3 region is required.');
 				return;
 			}
 			if (!this.s3AccessKeyId) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: S3 access key ID is required.');
+				new Notice('S3 access key ID is required.');
 				return;
 			}
 			const hasStoredSecret = !!(this.editMount?.encryptedS3SecretKey);
 			if (!this.editMount && !this.s3SecretKey && !hasStoredSecret) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: S3 secret access key is required.');
+				new Notice('S3 secret access key is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: virtual path is required.');
+				new Notice('Virtual path is required.');
 				return;
 			}
 
@@ -1061,13 +1061,13 @@ export class MountManagerModal extends Modal {
 			if (!this.sftpHost) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: SFTP host is required.');
+				new Notice('SFTP host is required.');
 				return;
 			}
 			if (!this.sftpUsername) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: SFTP username is required.');
+				new Notice('SFTP username is required.');
 				return;
 			}
 			const hasStoredPassword = !!(this.editMount?.encryptedSftpPassword);
@@ -1075,13 +1075,13 @@ export class MountManagerModal extends Modal {
 			if (!this.editMount && !this.sftpPassword && !hasStoredPassword && !hasKeyPath) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: SFTP password or private key path is required.');
+				new Notice('SFTP password or private key path is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: virtual path is required.');
+				new Notice('Virtual path is required.');
 				return;
 			}
 
@@ -1116,19 +1116,19 @@ export class MountManagerModal extends Modal {
 			if (!this.webdavUrl) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: WebDAV server URL is required.');
+				new Notice('WebDAV server URL is required.');
 				return;
 			}
 			try { new URL(this.webdavUrl); } catch {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: WebDAV URL is not valid. Include the scheme, e.g. https://…');
+				new Notice('WebDAV URL is not valid. Include the scheme, e.g. https://…');
 				return;
 			}
 			if (!this.webdavUsername) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: WebDAV username is required.');
+				new Notice('WebDAV username is required.');
 				return;
 			}
 			// Require a password on add unless an encrypted one is already stored
@@ -1137,13 +1137,13 @@ export class MountManagerModal extends Modal {
 			if (!this.editMount && !this.webdavPassword && !hasStoredPassword) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: WebDAV password is required.');
+				new Notice('WebDAV password is required.');
 				return;
 			}
 			if (!this.virtualPath.trim()) {
 				this.submitState.finish();
 				this.syncSubmitButtons();
-				new Notice('Folder Bridge: virtual path is required.');
+				new Notice('Virtual path is required.');
 				return;
 			}
 
@@ -1182,19 +1182,19 @@ export class MountManagerModal extends Modal {
 		if (!virtualPathToUse) {
 			this.submitState.finish();
 			this.syncSubmitButtons();
-			new Notice('Folder Bridge: virtual path is required.');
+			new Notice('Virtual path is required.');
 			return;
 		}
 		if (!this.realPath) {
 			this.submitState.finish();
 			this.syncSubmitButtons();
-			new Notice('Folder Bridge: real path is required.');
+			new Notice('Real path is required.');
 			return;
 		}
 		if (!path.isAbsolute(this.realPath)) {
 			this.submitState.finish();
 			this.syncSubmitButtons();
-			new Notice('Folder Bridge: real path must be an absolute filesystem path.');
+			new Notice('Real path must be an absolute filesystem path.');
 			return;
 		}
 

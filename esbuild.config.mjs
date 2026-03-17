@@ -1,6 +1,11 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+const __dirname = dirname(fileURLToPath(
+	import.meta.url));
 
 const banner =
 	`/*
@@ -78,6 +83,7 @@ export function loadBundledOptionalModule(moduleId) {
 }
 `,
 			loader: 'js',
+			resolveDir: __dirname,
 		}));
 	},
 };
