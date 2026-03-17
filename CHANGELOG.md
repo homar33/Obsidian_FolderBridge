@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.2] - 2026-03-17
+
+### Fixed
+- **Mount removal no longer triggers unnecessary file-system I/O** — `notifyVaultMountRemoved` now walks Obsidian's in-memory vault tree (`TFolder.children`) instead of calling `adapter.list()` recursively. The old approach routed through `VirtualAdapter`, making real FS / network calls for every subfolder during unmount, producing verbose `list: found mount for` / `listRealDirectory` log noise and visible file-explorer flicker on large mount trees. The new approach is purely in-memory and O(n) over already-known vault nodes.
+- **ESLint configuration and sentence-case cleanup** — added `parserOptions.project` to `eslint.config.mjs` to enable type-aware typescript-eslint rules; added missing browser/Node globals; disabled `@typescript-eslint/no-unsafe-*` rules (codebase uses `any` intentionally for Obsidian API interop); added `.DS_Store`, `Ctrl`, and `Cmd` to the brands list; fixed 7 additional sentence-case violations across `main.ts`, `src/FileWatcher.ts`, `src/ui/MountManagerModal.ts`, and `src/ui/WelcomeModal.ts`.
+
 ## [2.14.1] - 2026-03-14
 
 ### Fixed
