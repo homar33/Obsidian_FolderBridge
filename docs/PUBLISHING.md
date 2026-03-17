@@ -49,20 +49,9 @@ npm test            # Vitest unit tests
 
 Every release follows this sequence. **Do not skip steps.**
 
-### 2a. Update version numbers
+### 2a. Write the CHANGELOG entry
 
-Update the version string in **all four** of the following files:
-
-```
-manifest.json          "version": "X.Y.Z"
-package.json           "version": "X.Y.Z"
-versions.json          add "X.Y.Z": "0.15.0" entry
-CHANGELOG.md           add ## [X.Y.Z] - YYYY-MM-DD section
-```
-
-### 2b. Write the CHANGELOG entry
-
-Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format. Use the correct section headers:
+Edit `CHANGELOG.md` and add a new section under `## [Unreleased]`:
 
 ```markdown
 ## [X.Y.Z] - YYYY-MM-DD
@@ -82,47 +71,44 @@ Follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format. Use 
 
 Each bullet must be specific enough for a user to understand what changed and why. Mention the root cause for bug fixes.
 
-### 2c. Commit the version bump
+### 2b. Run the version bump
+
+Stage the changelog, then run `npm version`. The `version` lifecycle hook updates `manifest.json` and `versions.json` automatically. `.npmrc` is configured with `tag-version-prefix=` so the git tag is created **without a `v` prefix** — this is required for the GitHub Actions release workflow to fire.
 
 ```sh
-git add main.ts src/ CHANGELOG.md manifest.json package.json versions.json
-git commit -m "chore: release vX.Y.Z"
+# Stage your changelog entry first
+git add CHANGELOG.md
+
+# For a patch release (bug fixes only):
+npm version patch
+
+# For a minor release (new features, backwards-compatible):
+npm version minor
+
+# For a major release (breaking changes):
+npm version major
 ```
 
-### 2d. Build the production bundle
+`npm version` will:
+1. Bump `package.json`, `manifest.json`, `versions.json`
+2. Commit all staged files with message `Release X.Y.Z`
+3. Create git tag `X.Y.Z` (**no `v` prefix** — critical for the release workflow)
+
+> ⚠️ **Never** run `npm version --no-git-tag-version` and manually `git tag vX.Y.Z`. The `v` prefix breaks the `release.yml` trigger pattern `[0-9]*.[0-9]*.[0-9]*`, so the GitHub release with assets will never be created.
+
+### 2c. Push the commit and tag
 
 ```sh
-npm run build
+git push && git push origin X.Y.Z
 ```
 
-Verify `main.js` is generated and its size is reasonable (generally 200–900 KB).
+The `release.yml` GitHub Actions workflow triggers automatically on the `X.Y.Z` tag. It will:
+1. Install deps, run tests, build `main.js`
+2. Validate tag matches `manifest.json` version  
+3. Extract release notes from `CHANGELOG.md`
+4. Create the GitHub release and attach `main.js`, `manifest.json`, `styles.css`
 
-### 2e. Tag the commit
-
-Tag format: `X.Y.Z` — **no `v` prefix** (matches the Obsidian release tag convention used since v2.4.1).
-
-```sh
-git tag X.Y.Z
-git push origin main --tags
-```
-
-### 2f. Create the GitHub release
-
-```sh
-gh release create X.Y.Z \
-  --title "X.Y.Z" \
-  --latest \
-  --notes "$(cat <<'EOF'
-## What's Changed
-
-### Fixed
-- ...
-
-See [CHANGELOG.md](https://github.com/tescolopio/Obsidian_FolderBridge/blob/main/CHANGELOG.md) for full details.
-EOF
-)" \
-  main.js manifest.json styles.css
-```
+> **You do not need to create the GitHub release manually.** The workflow handles it.
 
 > **Critical:** The release tag must match `manifest.json` `"version"` exactly. The bot rejects mismatches.
 
