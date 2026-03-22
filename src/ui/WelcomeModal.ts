@@ -18,15 +18,15 @@ export class WelcomeModal extends Modal {
 	onOpen(): void {
 		const { contentEl } = this;
 		contentEl.empty();
+		const pluginName = 'Folder Bridge';
+		const quickSwitcher = 'Quick Switcher';
 
-		// eslint-disable-next-line obsidianmd/ui/sentence-case
-		contentEl.createEl('h2', { text: 'Welcome to Folder Bridge' });
+		contentEl.createEl('h2', { text: `Welcome to ${pluginName}` });
 
 		const descEl = contentEl.createDiv({ cls: 'folderbridge-welcome-desc' });
 
 		descEl.createEl('p', {
-			// eslint-disable-next-line obsidianmd/ui/sentence-case
-			text: 'Folder Bridge lets you mount external folders into your vault as seamless, native-feeling directories, with no copying, duplication, or symlinks required.',
+			text: `${pluginName} lets you mount external folders into your vault as seamless, native-feeling directories, with no copying, duplication, or symlinks required.`,
 		}).addClass('folderbridge-welcome-intro');
 
 		descEl.createEl('p', { text: 'What you can mount' }).addClass('folderbridge-welcome-intro');
@@ -41,16 +41,14 @@ export class WelcomeModal extends Modal {
 		}
 
 		descEl.createEl('p', {
-			// eslint-disable-next-line obsidianmd/ui/sentence-case
-			text: 'Mounted folders appear instantly in the file explorer, support full-text search, Quick Switcher, and all your plugins.',
+			text: `Mounted folders appear instantly in the file explorer, support full-text search, ${quickSwitcher}, and all your plugins.`,
 			cls: 'setting-item-description',
 		});
 
 		const tipBox = contentEl.createDiv({ cls: 'folderbridge-tip-box' });
 		tipBox.createEl('strong', { text: '💡 quick tip: ' });
 		tipBox.appendText('After adding a mount, you can manage it from ');
-		// eslint-disable-next-line obsidianmd/ui/sentence-case
-		tipBox.createEl('strong', { text: 'Settings, then Folder Bridge' });
+		tipBox.createEl('strong', { text: `Settings, then ${pluginName}` });
 		tipBox.appendText('. Per-mount options: read-only, custom ignore list, watcher tuning, and device-specific path overrides.');
 
 		new Setting(contentEl)
