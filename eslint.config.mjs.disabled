@@ -1,0 +1,101 @@
+import tseslint from "typescript-eslint";
+import obsidianmd from "eslint-plugin-obsidianmd";
+
+export default [
+    // 1) Config that applies only to TypeScript files (type-aware rules enabled)
+    {
+        files: ["**/*.ts"],
+        ignores: ["dist/**", "archive/**", "versions.json", "main.js"],
+
+        // include the recommended TS configs here
+        ...tseslint.configs.recommended,
+        ...obsidianmd.configs.recommended,
+
+        languageOptions: {
+            sourceType: "module",
+            // Use optional chaining to safely access the parser if the recommended config provides languageOptions
+            parser: tseslint.configs.recommended.languageOptions ? .parser,
+            parserOptions: {
+                project: true,
+                tsconfigRootDir: import.meta.dirname,
+            },
+            globals: {
+                require: "readonly",
+                process: "readonly",
+                __dirname: "readonly",
+                __filename: "readonly",
+                module: "readonly",
+                exports: "writable",
+                Buffer: "readonly",
+                console: "readonly",
+                setTimeout: "readonly",
+                setInterval: "readonly",
+                clearTimeout: "readonly",
+                clearInterval: "readonly",
+                URL: "readonly",
+                Promise: "readonly",
+                window: "readonly",
+                document: "readonly",
+                sessionStorage: "readonly",
+                localStorage: "readonly",
+                crypto: "readonly",
+                AsyncIterable: "readonly",
+                NodeJS: "readonly",
+                describe: "readonly",
+                it: "readonly",
+                expect: "readonly",
+                beforeEach: "readonly",
+                afterEach: "readonly",
+                vi: "readonly",
+            },
+        },
+
+        rules: {
+            // your TS rules (same as before)
+            "no-unused-vars": "off",
+            "@typescript-eslint/no-unused-vars": ["error", { args: "none" }],
+            "@typescript-eslint/ban-ts-comment": "off",
+            "@typescript-eslint/no-empty-function": "off",
+            "@typescript-eslint/no-explicit-any": "off",
+            "@typescript-eslint/no-this-alias": "off",
+            "@typescript-eslint/no-require-imports": "off",
+            "@typescript-eslint/no-var-requires": "off",
+            "@typescript-eslint/no-unsafe-assignment": "off",
+            "@typescript-eslint/no-unsafe-member-access": "off",
+            "@typescript-eslint/no-unsafe-call": "off",
+            "@typescript-eslint/no-unsafe-return": "off",
+            "@typescript-eslint/no-unsafe-argument": "off",
+            "@typescript-eslint/no-unnecessary-type-assertion": "off",
+
+            // Obsidian rules that exist in your plugin
+            "obsidianmd/validate-manifest": "error",
+
+            // sentence-case (keep your brands/acronyms)
+            "obsidianmd/ui/sentence-case": ["warn", {
+                /* your brands/acronyms and enforceCamelCaseLower */
+            }],
+        },
+    },
+
+    // 2) Config that applies to JS files — disable type-aware TS rules
+    {
+        files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
+        ignores: ["dist/**", "archive/**", "versions.json"],
+
+        languageOptions: {
+            sourceType: "module",
+            parserOptions: {
+                // do NOT set project here; leave undefined so no TS Program is created
+            },
+        },
+
+        rules: {
+            // Turn off type-aware @typescript-eslint rules for JS files
+            "@typescript-eslint/no-deprecated": "off",
+            "@typescript-eslint/no-floating-promises": "off",
+            "@typescript-eslint/restrict-template-expressions": "off",
+            "@typescript-eslint/unbound-method": "off",
+            // ...add any other type-aware rules you see errors for
+        },
+    },
+];
