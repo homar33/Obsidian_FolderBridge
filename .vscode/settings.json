@@ -1,18 +1,26 @@
 {
-	"files.exclude": {
-		"node_modules": true,
-		"main.js": true,
-		"main.js.map": true
-	},
-	"search.exclude": {
-		"node_modules": true,
-		"main.js": true
-	},
-	"editor.defaultFormatter": "vscode.typescript-language-features",
-	"editor.formatOnSave": true,
-	"editor.codeActionsOnSave": {
-		"source.fixAll.eslint": "explicit"
-	},
-	"typescript.tsdk": "node_modules/typescript/lib",
-	"typescript.enablePromptUseWorkspaceTsdk": true
+  "files.exclude": {
+    "node_modules": true,
+    "main.js": true,
+    "main.js.map": true
+  },
+  "search.exclude": {
+    "node_modules": true,
+    "main.js": true
+  },
+  "editor.defaultFormatter": "vscode.typescript-language-features",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Prevent ESLint/formatters from auto-fixing JSON files (including this one)
+  "[json]": {
+    "editor.formatOnSave": false,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": false
+    }
+  }
 }
