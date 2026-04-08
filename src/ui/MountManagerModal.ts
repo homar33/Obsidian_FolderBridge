@@ -33,10 +33,12 @@ interface ElectronOpenDialogOptions {
 export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: string): Promise<string | null> {
 	try {
 		const runtimeRequire = getRuntimeRequire();
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		const electron = runtimeRequire?.('electron');
 		// Electron ≥ 14 ships remote via @electron/remote; Obsidian re-exports
 		// it on the electron object so both old and new versions work here.
-		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		const dialog: ElectronDialog | undefined = (electron as Record<string, unknown>)?.remote?.dialog ?? (electron as Record<string, unknown>)?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Native folder browser is unavailable. Please type the path manually.');
 			return null;
@@ -66,8 +68,10 @@ export async function browseFolderOnDisk(title = 'Select folder', defaultPath?: 
 export async function browseMultipleFoldersOnDisk(title = 'Select folders', defaultPath?: string): Promise<string[] | null> {
 	try {
 		const runtimeRequire = getRuntimeRequire();
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
 		const electron = runtimeRequire?.('electron');
-		const dialog: ElectronDialog | undefined = electron?.remote?.dialog ?? electron?.dialog;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		const dialog: ElectronDialog | undefined = (electron as Record<string, unknown>)?.remote?.dialog ?? (electron as Record<string, unknown>)?.dialog;
 		if (!dialog?.showOpenDialog) {
 			new Notice('Native folder browser is unavailable. Please type the path manually.');
 			return null;

@@ -1259,7 +1259,7 @@ export class VirtualAdapter {
 				content = Buffer.from(await this.orig().readBinary(normalizedPath));
 			}
 
-			const contentAB = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) as ArrayBuffer;
+			const contentAB = content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength);
 
 			// Write to destination
 			if (dstWebDAV && dstMount) {

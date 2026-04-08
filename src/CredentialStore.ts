@@ -42,10 +42,13 @@ type SafeStorage = {
 function getSafeStorage(): SafeStorage | null {
     try {
         const runtimeRequire = getRuntimeRequire();
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const electron = runtimeRequire?.('electron');
         // safeStorage lives in the main process; Obsidian re-exports it via remote.
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const ss: SafeStorage | undefined =
-            electron?.remote?.safeStorage ?? electron?.safeStorage;
+            (electron as Record<string, unknown>)?.remote?.safeStorage ??
+            (electron as Record<string, unknown>)?.safeStorage;
         return ss ?? null;
     } catch {
         return null;

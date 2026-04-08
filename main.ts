@@ -55,6 +55,7 @@ type ElectronModule = { shell?: ElectronShell; default?: { shell?: ElectronShell
 
 const GITHUB_REPO_URL = 'https://github.com/tescolopio/Obsidian_FolderBridge';
 const GITHUB_PROFILE_URL = 'https://github.com/tescolopio';
+const BUY_ME_COFFEE_URL = 'https://buymeacoffee.com/tescolopio';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1033,14 +1034,22 @@ export default class FolderBridgePlugin extends Plugin {
 			get(target, prop, receiver) {
 				// If VirtualAdapter has the property, use it
 				if (prop in target) {
-					const val = Reflect.get(target, prop, receiver);
-					return typeof val === 'function' ? val.bind(target) : val;
+					const val = Reflect.get(target, prop, receiver) as unknown;
+					if (typeof val === 'function') {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-return
+						return (val as () => void).bind(target);
+					}
+					return val;
 				}
 				// Otherwise fall through to the original adapter
 				const orig = (target as unknown as { orig?(): DataAdapter }).orig?.();
 				if (orig && prop in orig) {
-					const val = orig[prop as keyof typeof orig];
-					return typeof val === 'function' ? val.bind(orig) : val;
+					const val = orig[prop as keyof typeof orig] as unknown;
+					if (typeof val === 'function') {
+						// eslint-disable-next-line @typescript-eslint/no-unsafe-return
+						return (val as () => void).bind(orig);
+					}
+					return val;
 				}
 				return undefined;
 			},
@@ -1052,6 +1061,7 @@ export default class FolderBridgePlugin extends Plugin {
 			// back to it, reporting its prototype is semantically accurate.
 			getPrototypeOf(target) {
 				const orig = (target as unknown as { orig?(): DataAdapter }).orig?.();
+				// eslint-disable-next-line @typescript-eslint/no-unsafe-return
 				return orig ? Object.getPrototypeOf(orig) : Object.getPrototypeOf(target);
 			},
 		}) as DataAdapter;
@@ -2012,7 +2022,8 @@ export default class FolderBridgePlugin extends Plugin {
 	// ------------------------------------------------------------------
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData() as Record<string, unknown>;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 		this.settings.managedTocSource = this.settings.managedTocSource ?? '';
 		this.persistedMountPoints = [...this.settings.mountPoints];
 		this.persistedAllowlist = [...this.settings.allowlist];
@@ -2099,6 +2110,9 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 		const dataUri = 'data: URI';
 		const dsStore = '.DS_Store';
 		const ctrlCmd = 'Ctrl / Cmd';
+		const ghRepo = 'repo';
+		const moreProj = 'projects';
+		const buyMe = 'me a coffee';
 
 		// ── Header ──────────────────────────────────────────────────────
 
@@ -2210,13 +2224,17 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 							.setName(`Support ${pluginName}`)
 						.setDesc('Follow ongoing work, browse other projects, or star the repository on GitHub.')
 						.addButton(btn => btn
-							.setButtonText('GitHub repo')
+							.setButtonText(`GitHub ${ghRepo}`)
 								.setTooltip(`Open the ${pluginName} repository`)
 							.onClick(() => openExternalUrl(GITHUB_REPO_URL)))
 						.addButton(btn => btn
-							.setButtonText('More projects')
+							.setButtonText(`More ${moreProj}`)
 							.setTooltip('Open the author GitHub profile')
-							.onClick(() => openExternalUrl(GITHUB_PROFILE_URL)));
+							.onClick(() => openExternalUrl(GITHUB_PROFILE_URL)))
+						.addButton(btn => btn
+							.setButtonText(`☕ Buy ${buyMe}`)
+							.setTooltip('Support development with a coffee')
+							.onClick(() => openExternalUrl(BUY_ME_COFFEE_URL)));
 				}));
 
 		// ── Ignore Lists ─────────────────────────────────────────────────
@@ -2618,10 +2636,10 @@ class FolderBridgeSettingTab extends PluginSettingTab {
 							if (!file) return;
 							try {
 								const text = await file.text();
-								const parsed = JSON.parse(text);
+								const parsed = JSON.parse(text) as unknown;
 								const mounts: MountPoint[] = Array.isArray(parsed)
-									? parsed                        // legacy bare array
-									: parsed.mountPoints ?? [];    // { version, mountPoints }
+									? (parsed as MountPoint[])                        // legacy bare array
+									: (parsed as Record<string, unknown>).mountPoints ?? [];    // { version, mountPoints }
 								if (!Array.isArray(mounts) || mounts.length === 0) {
 									new Notice(`${this.plugin.manifest.name}: no mount points found in the selected file.`);
 									return;
